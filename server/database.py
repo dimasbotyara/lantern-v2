@@ -88,7 +88,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(256), nullable=False)
-    nick_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#cba6f7")  # Hex color
+    nick_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#cba6f7")
     avatar_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=UserStatus.OFFLINE.value
@@ -97,9 +97,12 @@ class User(Base):
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    # Relationships
+    # Relationships — ЯВНО указываем foreign_keys для каждого
     sent_messages: Mapped[list["Message"]] = relationship(
-        "Message", back_populates="author", cascade="all, delete-orphan"
+        "Message",
+        back_populates="author",
+        foreign_keys="[Message.author_id]",
+        cascade="all, delete-orphan",
     )
     reactions: Mapped[list["Reaction"]] = relationship(
         "Reaction", back_populates="user", cascade="all, delete-orphan"
@@ -202,7 +205,7 @@ class Message(Base):
     # Удаление
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_for_users: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True  # JSON-список user_id, для кого удалено
+        Text, nullable=True
     )
 
     # Временные метки
@@ -211,13 +214,26 @@ class Message(Base):
     )
     edited_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Relationships
+    # Relationships — ЯВНО указываем foreign_keys
     chat: Mapped["Chat"] = relationship("Chat", back_populates="messages")
-    author: Mapped["User"] = relationship("User", back_populates="sent_messages", foreign_keys=[author_id])
-    forwarded_from: Mapped[Optional["User"]] = relationship("User", foreign_keys=[forwarded_from_id])
-    reply_to: Mapped[Optional["Message"]] = relationship(
-        "Message", remote_side="Message.id", foreign_keys=[reply_to_id]
+
+    author: Mapped["User"] = relationship(
+        "User",
+        back_populates="sent_messages",
+        foreign_keys=[author_id],
     )
+
+    forwarded_from: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[forwarded_from_id],
+    )
+
+    reply_to: Mapped[Optional["Message"]] = relationship(
+        "Message",
+        remote_side="Message.id",
+        foreign_keys=[reply_to_id],
+    )
+
     reactions: Mapped[list["Reaction"]] = relationship(
         "Reaction", back_populates="message", cascade="all, delete-orphan"
     )
@@ -382,7 +398,10 @@ class PinnedMessage(Base):
     # Relationships
     chat: Mapped["Chat"] = relationship("Chat", back_populates="pinned_messages")
     message: Mapped["Message"] = relationship("Message", back_populates="pinned_entry")
-    pinned_by: Mapped["User"] = relationship("User")
+    pinned_by: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[pinned_by_id],
+    )
 
 
 class StickerPack(Base):

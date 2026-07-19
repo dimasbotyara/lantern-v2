@@ -3,18 +3,31 @@ Lantern v2 — Client Entry Point
 Главное окно приложения. Связывает все компоненты.
 """
 
+import os
 import sys
+from pathlib import Path
+
+# Фикс для Linux: используем Qt plugins из venv/PyQt5, а не системные
+# ВАЖНО: этот блок ДОЛЖЕН быть ДО импортов PyQt5.QtWidgets
+if sys.platform.startswith("linux"):
+    import PyQt5
+    pyqt_qt_root = Path(PyQt5.__file__).resolve().parent / "Qt5"
+    qt_plugins = pyqt_qt_root / "plugins"
+    os.environ["QT_PLUGIN_PATH"] = str(qt_plugins)
+    os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(qt_plugins / "platforms")
+    os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+
 import asyncio
 import json
 from typing import Optional
-from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout,
     QVBoxLayout, QStackedWidget, QSplitter, QFileDialog,
-    QSystemTrayIcon, QMenu, QAction, QLabel, QMessageBox
+    QSystemTrayIcon, QMenu, QAction, QLabel, QMessageBox,
+    QPushButton,
 )
-from PyQt5.QtGui import QIcon, QFont, QPixmap, QCloseEvent
+from PyQt5.QtGui import QIcon, QFont, QPixmap, QCloseEvent, QColor, QPainter
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QSettings
 
 import qasync
