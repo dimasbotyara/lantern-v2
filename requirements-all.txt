@@ -1,0 +1,21 @@
+# === Server ===
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+websockets==14.1
+sqlalchemy[asyncio]==2.0.36
+aiosqlite==0.20.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+cryptography==44.0.0
+aiofiles==24.1.0
+python-multipart==0.0.18
+Pillow==11.1.0
+zeroconf==0.136.2
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# === Client ===
+PyQt5==5.15.11
+qasync==0.27.1
+aiohttp==3.11.11
+plyer==2.1.0
