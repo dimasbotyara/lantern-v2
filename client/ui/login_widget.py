@@ -80,10 +80,18 @@ class LoginWidget(QWidget):
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Центрирующий контейнер
+        # === Оборачиваем в QScrollArea ===
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Прозрачный фон ТОЛЬКО для скролла, не для детей!
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+
         center_widget = QWidget()
+        center_widget.setObjectName("loginCenterWidget")  # Используем ObjectName вместо inline стиля!
+
         center_layout = QVBoxLayout(center_widget)
-        center_layout.setAlignment(Qt.AlignCenter)
 
         # === Карточка ===
         self._card = QWidget()
@@ -91,14 +99,13 @@ class LoginWidget(QWidget):
         self._card.setFixedWidth(420)
 
         card_layout = QVBoxLayout(self._card)
-        card_layout.setSpacing(16)
-        card_layout.setContentsMargins(40, 40, 40, 40)
+        card_layout.setSpacing(12)
+        card_layout.setContentsMargins(0, 0, 0, 0)
 
         # Лого
         logo_label = QLabel("🏮")
         logo_label.setObjectName("loginLogo")
         logo_label.setAlignment(Qt.AlignCenter)
-        logo_label.setFont(QFont("Segoe UI Emoji", 48))
         card_layout.addWidget(logo_label)
 
         # Заголовок
@@ -151,7 +158,6 @@ class LoginWidget(QWidget):
         card_layout.addWidget(sep)
 
         # === Поля ввода ===
-        # Логин
         username_label = QLabel("Логин")
         username_label.setObjectName("mutedLabel")
         card_layout.addWidget(username_label)
@@ -161,7 +167,6 @@ class LoginWidget(QWidget):
         self._username_input.setMaxLength(64)
         card_layout.addWidget(self._username_input)
 
-        # Пароль
         password_label = QLabel("Пароль")
         password_label.setObjectName("mutedLabel")
         card_layout.addWidget(password_label)
@@ -179,6 +184,7 @@ class LoginWidget(QWidget):
         self._show_pass_btn.setObjectName("showPasswordButton")
         self._show_pass_btn.setCursor(Qt.PointingHandCursor)
         self._show_pass_btn.setCheckable(True)
+        # УБРАЛИ setFont!
         self._show_pass_btn.toggled.connect(self._toggle_password_visibility)
         self._show_pass_btn.setFixedSize(36, 36)
         password_row.addWidget(self._show_pass_btn)
@@ -190,7 +196,7 @@ class LoginWidget(QWidget):
         self._register_fields.setVisible(False)
         reg_layout = QVBoxLayout(self._register_fields)
         reg_layout.setContentsMargins(0, 0, 0, 0)
-        reg_layout.setSpacing(12)
+        reg_layout.setSpacing(8)
 
         # Отображаемый ник
         nick_label = QLabel("Отображаемый ник")
@@ -214,8 +220,10 @@ class LoginWidget(QWidget):
         for i, (color_hex, color_name) in enumerate(self.NICK_COLORS):
             btn = QPushButton()
             btn.setFixedSize(32, 32)
+            btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Фикс от растягивания!
             btn.setCursor(Qt.PointingHandCursor)
             btn.setToolTip(color_name)
+            btn.setProperty("color_hex", color_hex)
             btn.setStyleSheet(
                 f"QPushButton {{ background-color: {color_hex}; "
                 f"border-radius: 16px; border: 2px solid transparent; }}"
@@ -230,7 +238,6 @@ class LoginWidget(QWidget):
 
         reg_layout.addLayout(color_grid)
 
-        # Выбираем mauve по умолчанию
         self._select_nick_color("#cba6f7", self._color_buttons[3])
 
         card_layout.addWidget(self._register_fields)
@@ -273,8 +280,12 @@ class LoginWidget(QWidget):
         credit.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(credit)
 
-        center_layout.addWidget(self._card)
-        outer_layout.addWidget(center_widget)
+        center_layout.addStretch(1)
+        center_layout.addWidget(self._card, 0, Qt.AlignHCenter)
+        center_layout.addStretch(1)
+
+        scroll.setWidget(center_widget)
+        outer_layout.addWidget(scroll)
 
         # Enter для отправки
         self._password_input.returnPressed.connect(self._on_submit)
@@ -381,21 +392,13 @@ class LoginWidget(QWidget):
 
         # Сбрасываем стили всех кнопок
         for btn in self._color_buttons:
-            hex_color = btn.toolTip()
-            actual_color = ""
-            for c, n in self.NICK_COLORS:
-                if n == hex_color:
-                    actual_color = c
-                    break
-            if not actual_color:
-                # Fallback
-                actual_color = btn.styleSheet().split("background-color:")[1].split(";")[0].strip() if "background-color:" in btn.styleSheet() else "#cba6f7"
-
-            btn.setStyleSheet(
-                f"QPushButton {{ background-color: {actual_color}; "
-                f"border-radius: 16px; border: 2px solid transparent; }}"
-                f"QPushButton:hover {{ border-color: {self._palette.text}; }}"
-            )
+            actual_color = btn.property("color_hex")  # Берём из свойства, а не из CSS!
+            if actual_color:
+                btn.setStyleSheet(
+                    f"QPushButton {{ background-color: {actual_color}; "
+                    f"border-radius: 16px; border: 2px solid transparent; }}"
+                    f"QPushButton:hover {{ border-color: {self._palette.text}; }}"
+                )
 
         # Подсвечиваем выбранную
         button.setStyleSheet(

@@ -67,7 +67,7 @@ class StyleSheetGenerator:
 QWidget {{
     background-color: {self.p.base};
     color: {self.p.text};
-    font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", "Noto Sans", sans-serif;
+    font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", "Noto Sans", "Noto Color Emoji", sans-serif;
     font-size: 14px;
     selection-background-color: {self.a.hex};
     selection-color: {self.p.crust};
@@ -1218,6 +1218,10 @@ QWidget#colorPickerItemSelected {{
 /* ===== LOGIN ===== */
 QWidget#loginPage {{
     background-color: {self.p.crust};
+}}
+
+QWidget#loginCenterWidget {{
+    background-color: transparent;
 }}
 
 QWidget#loginCard {{

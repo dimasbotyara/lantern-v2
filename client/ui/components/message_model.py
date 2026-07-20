@@ -82,7 +82,7 @@ class MessageModel(QAbstractListModel):
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
         if not index.isValid() or index.row() >= len(self._items):
-            return QVariant()
+            return None
 
         item = self._items[index.row()]
         item_type = item.get("__item_type", "message")
@@ -93,7 +93,7 @@ class MessageModel(QAbstractListModel):
         if item_type in ("date_separator", "unread_separator"):
             if role == MessageRole.SeparatorText:
                 return item.get("__separator_text", "")
-            return QVariant()
+            return None
 
         # Роли для сообщений
         role_map = {
@@ -122,7 +122,7 @@ class MessageModel(QAbstractListModel):
         if getter:
             return getter()
 
-        return QVariant()
+        return None
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlags:
         if not index.isValid():

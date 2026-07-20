@@ -506,12 +506,22 @@ class MainWindow(QMainWindow):
         self._chat_header_name.setText(chat_data.get("name", "Chat"))
 
         # Загружаем
-        self._chat_view.load_chat(chat_id, messages)
+        unread_count = chat_data.get("unread_count", 0)
+        self._chat_view.load_chat(chat_id, messages, unread_count=unread_count)
         self._sidebar.set_selected_chat(chat_id)
         self._message_input.clear_input()
         self._message_input.set_focus()
 
-        # Отмечаем прочитанным
+        # Сбрасываем бейдж непрочитанных в сайдбаре
+        if unread_count > 0:
+            chat_data["unread_count"] = 0
+            for chat in self._chats:
+                if chat.get("id") == chat_id:
+                    chat["unread_count"] = 0
+                    break
+            self._sidebar.update_chat(chat_data)
+
+        # Отмечаем прочитанным (после отрисовки разделителя непрочитанных)
         await api_client.mark_chat_read(chat_id)
 
     def _on_load_more(self) -> None:

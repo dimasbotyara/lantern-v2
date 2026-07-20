@@ -145,11 +145,15 @@ class MessageDelegate(QStyledItemDelegate):
         # Кэш QTextDocument для вычисления размеров
         self._size_cache: dict[str, QSize] = {}
 
+        # Кэш QTextDocument для отрисовки (чтобы не тормозило при скролле)
+        self._doc_cache: dict[str, QTextDocument] = {}
+
     def set_theme(self, palette: Palette, accent: AccentColor) -> None:
         """Обновляет тему без пересоздания делегата."""
         self._palette = palette
         self._accent = accent
         self._size_cache.clear()
+        self._doc_cache.clear()
         # Пересоздаём цвета
         ar, ag, ab = accent.rgb
         self._color_own_bg = QColor(ar, ag, ab, 35)
@@ -184,6 +188,15 @@ class MessageDelegate(QStyledItemDelegate):
     def invalidate_cache(self) -> None:
         """Сбрасывает кэш размеров (при изменении ширины окна)."""
         self._size_cache.clear()
+        self._doc_cache.clear()
+
+    def invalidate_message_cache(self, message_id: str) -> None:
+        """Сбрасывает кэш для конкретного сообщения (при редактировании и т.д.)."""
+        if not message_id:
+            return
+        prefix = f"{message_id}_"
+        self._size_cache = {k: v for k, v in self._size_cache.items() if not k.startswith(prefix)}
+        self._doc_cache = {k: v for k, v in self._doc_cache.items() if not k.startswith(prefix)}
 
     # ========================
     # sizeHint — КРИТИЧЕСКИ ВАЖНО!
@@ -289,7 +302,7 @@ class MessageDelegate(QStyledItemDelegate):
 
         # Reactions
         if reactions:
-            height += self.REACTION_HEIGHT + self.SPACING
+            height += self._calculate_reactions_height(reactions, content_width) + self.SPACING
 
         # Timestamp line (время + edited)
         height += QFontMetrics(self._font_timestamp).height() + self.SPACING
@@ -317,6 +330,29 @@ class MessageDelegate(QStyledItemDelegate):
         height += 2  # Spacing
         height += QFontMetrics(self._font_reply_text).height()  # Текст
         return height
+
+    def _calculate_reactions_height(self, reactions: list[dict], max_width: int) -> int:
+        """Вычисляет высоту полоски реакций с учётом переноса строк."""
+        if not reactions:
+            return 0
+
+        rx = 0
+        rows = 1
+        fm = QFontMetrics(self._font_reaction)
+
+        for reaction in reactions:
+            emoji = reaction.get("emoji", "")
+            count = reaction.get("count", 0)
+            text = f"{emoji} {count}" if count > 1 else emoji
+            badge_width = fm.horizontalAdvance(text) + 16
+
+            if rx > 0 and rx + badge_width > max_width:
+                rows += 1
+                rx = badge_width + 4
+            else:
+                rx += badge_width + 4
+
+        return rows * self.REACTION_HEIGHT + max(0, rows - 1) * 4
 
     def _calculate_poll_height(self, poll: dict, max_width: int) -> int:
         """Вычисляет высоту опроса."""
@@ -575,7 +611,8 @@ class MessageDelegate(QStyledItemDelegate):
         else:
             # Content text
             if content and msg_type == "text":
-                y = self._paint_text_content(painter, x, y, actual_content_width, content)
+                msg_id = index.data(MessageRole.MessageId) or ""
+                y = self._paint_text_content(painter, x, y, actual_content_width, content, msg_id)
                 y += self.SPACING
 
             # File
@@ -734,21 +771,28 @@ class MessageDelegate(QStyledItemDelegate):
             y: float,
             max_width: float,
             text: str,
+            msg_id: str = "",
     ) -> float:
-        """Рисует текстовый контент с поддержкой markdown."""
-        doc = QTextDocument()
-        doc.setDefaultFont(self._font_text)
-        doc.setTextWidth(max_width)
+        """Рисует текстовый контент с поддержкой markdown (с кэшированием)."""
+        # Проверяем кэш по ID сообщения и ширине
+        cache_key = f"{msg_id}_{int(max_width)}"
+        doc = self._doc_cache.get(cache_key)
 
-        # Конвертируем markdown в HTML
-        html = self._markdown_to_html(text)
+        if doc is None:
+            doc = QTextDocument()
+            doc.setDefaultFont(self._font_text)
+            doc.setTextWidth(max_width)
 
-        # Устанавливаем цвет текста по умолчанию
-        default_style = f"color: {self._color_text.name()};"
-        doc.setDefaultStyleSheet(f"body {{ {default_style} }}")
-        doc.setHtml(f"<body>{html}</body>")
+            html = self._markdown_to_html(text)
+            default_style = f"color: {self._color_text.name()};"
+            doc.setDefaultStyleSheet(f"body {{ {default_style} }}")
+            doc.setHtml(f"<body>{html}</body>")
 
-        # Рисуем через QTextDocument
+            # Сохраняем в кэш (ограничиваем размер, чтобы не пожрать память)
+            if len(self._doc_cache) > 200:
+                self._doc_cache.clear()
+            self._doc_cache[cache_key] = doc
+
         painter.save()
         painter.translate(x, y)
 

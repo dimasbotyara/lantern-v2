@@ -93,6 +93,7 @@ class ChatView(QWidget):
         self._list_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._list_view.setFocusPolicy(Qt.NoFocus)
         self._list_view.setMouseTracking(True)
+        self._list_view.setAttribute(Qt.WA_Hover, True)
         self._list_view.setUniformItemSizes(False)
         self._list_view.setSpacing(0)
         self._list_view.setWordWrap(False)
@@ -133,13 +134,14 @@ class ChatView(QWidget):
         layout.addWidget(self._list_view, 1)
 
         # === Empty state label ===
-        self._empty_label = QLabel("💬 Начните общение!")
+        self._empty_label = QLabel("💬 Начните общение!", self)
         self._empty_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self._empty_label.setStyleSheet(
             f"color: {self._palette.overlay0}; font-size: 16px; "
-            f"padding-top: 60px; font-weight: 500;"
+            f"padding-top: 60px; font-weight: 500; background: transparent;"
         )
         self._empty_label.setVisible(False)
+        self._empty_label.raise_()
 
         # Модельные сигналы
         self._model.messages_loaded.connect(self._on_messages_loaded)
@@ -184,6 +186,7 @@ class ChatView(QWidget):
         chat_id: str,
         messages: list[dict],
         last_read_message_id: Optional[str] = None,
+        unread_count: int = 0,
     ) -> None:
         """
         Загружает чат: очищает старые данные, загружает сообщения.
@@ -192,6 +195,12 @@ class ChatView(QWidget):
         self._has_more_messages = True
         self._is_loading_more = False
 
+        if last_read_message_id is None and unread_count > 0 and messages:
+            # Вычисляем last_read из количества непрочитанных
+            real_messages = [m for m in messages if m.get("id")]
+            if unread_count < len(real_messages):
+                last_read_message_id = real_messages[-(unread_count + 1)].get("id")
+
         self._model.set_last_read_message_id(last_read_message_id)
         self._model.load_messages(messages)
 
@@ -199,6 +208,9 @@ class ChatView(QWidget):
         is_empty = self._model.is_empty()
         self._empty_label.setVisible(is_empty)
         self._list_view.setVisible(not is_empty)
+        if is_empty:
+            self._empty_label.raise_()
+            self._update_empty_label_geometry()
 
         if not is_empty:
             self._scroll_to_unread_or_bottom()
@@ -239,26 +251,41 @@ class ChatView(QWidget):
     def update_message(self, message_id: str, updates: dict) -> None:
         """Обновляет сообщение."""
         self._model.update_message(message_id, updates)
+        self._invalidate_message(message_id)
 
     def delete_message(self, message_id: str, for_everyone: bool) -> None:
         """Удаляет сообщение."""
         self._model.delete_message(message_id, for_everyone)
+        self._delegate.invalidate_message_cache(message_id)
 
     def update_reactions(self, message_id: str, reactions: list[dict]) -> None:
         """Обновляет реакции."""
         self._model.update_reactions(message_id, reactions)
+        self._invalidate_message(message_id)
 
     def mark_edited(self, message_id: str, new_content: str) -> None:
         """Помечает как отредактированное."""
         self._model.mark_edited(message_id, new_content)
+        self._invalidate_message(message_id)
 
     def mark_pinned(self, message_id: str, pinned: bool) -> None:
         """Закрепляет/открепляет."""
         self._model.mark_pinned(message_id, pinned)
+        self._invalidate_message(message_id)
 
     def update_poll(self, message_id: str, poll_data: dict) -> None:
         """Обновляет опрос."""
         self._model.update_poll(message_id, poll_data)
+        self._invalidate_message(message_id)
+
+    def _invalidate_message(self, message_id: str) -> None:
+        """Сбрасывает кэш делегата и пересчитывает layout для сообщения."""
+        self._delegate.invalidate_message_cache(message_id)
+        idx = self._model.get_message_index(message_id)
+        if idx is not None:
+            model_index = self._model.index(idx)
+            self._list_view.update(model_index)
+            self._list_view.doItemsLayout()
 
     def scroll_to_message(self, message_id: str) -> None:
         """Скроллит к сообщению."""
@@ -430,13 +457,16 @@ class ChatView(QWidget):
     # Resize
     # ========================
 
+    def _update_empty_label_geometry(self) -> None:
+        """Позиционирует empty-state поверх списка сообщений."""
+        if self._empty_label.isVisible():
+            self._empty_label.setGeometry(self._list_view.geometry())
+            self._empty_label.raise_()
+
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._delegate.invalidate_cache()
-
-        if self._empty_label.isVisible():
-            self._empty_label.setGeometry(self._list_view.geometry())
-
+        self._update_empty_label_geometry()
         self._list_view.doItemsLayout()
 
 
