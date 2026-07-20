@@ -74,6 +74,13 @@ class ConnectionBar(QWidget):
         self._attempt_label.setAlignment(Qt.AlignRight)
         layout.addWidget(self._attempt_label)
 
+    def _safe_repolish(self, widget: QWidget) -> None:
+        """Безопасно обновляет стиль виджета."""
+        _style = widget.style()
+        if _style:
+            _style.unpolish(widget)
+            _style.polish(widget)
+
     def show_reconnecting(self, attempt: int = 0) -> None:
         """
         Показывает панель в режиме переподключения.
@@ -83,13 +90,11 @@ class ConnectionBar(QWidget):
         """
         self._is_error = False
         self.setObjectName("connectionBar")
-        self.style().unpolish(self)
-        self.style().polish(self)
+        self._safe_repolish(self)
 
         self._text_label.setObjectName("connectionLabel")
         self._text_label.setText("Потеряно соединение с сервером, переподключение...")
-        self._text_label.style().unpolish(self._text_label)
-        self._text_label.style().polish(self._text_label)
+        self._safe_repolish(self._text_label)
 
         if attempt > 0:
             self._attempt_label.setText(f"Попытка {attempt}")
@@ -107,15 +112,13 @@ class ConnectionBar(QWidget):
         self._moon_timer.stop()
 
         self.setObjectName("connectionBarError")
-        self.style().unpolish(self)
-        self.style().polish(self)
+        self._safe_repolish(self)
 
         self._moon_label.setText("❌")
 
         self._text_label.setObjectName("connectionErrorLabel")
         self._text_label.setText(message)
-        self._text_label.style().unpolish(self._text_label)
-        self._text_label.style().polish(self._text_label)
+        self._safe_repolish(self._text_label)
 
         self._attempt_label.setText("")
 

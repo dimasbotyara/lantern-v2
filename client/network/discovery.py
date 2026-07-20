@@ -35,26 +35,55 @@ class DiscoveredServer:
 
 
 class ServerDiscoveryListener(ServiceListener):
-    """Listener для Zeroconf — получает уведомления о найденных сервисах."""
+    """
+    Listener для Zeroconf — получает уведомления о найденных сервисах.
+
+    ВАЖНО: методы add_service/update_service/remove_service
+    вызываются из потока Zeroconf, а НЕ из потока Qt.
+    Поэтому мы НЕ вызываем коллбэки напрямую, а сохраняем
+    данные и уведомляем через QTimer.singleShot(0, ...),
+    который выполнит коллбэк в главном потоке Qt.
+    """
 
     def __init__(self):
         self.servers: dict[str, DiscoveredServer] = {}
         self._callbacks: list[callable] = []
+        self._pending_notify = False
 
     def add_callback(self, callback: callable) -> None:
         """Добавляет callback, вызываемый при обнаружении/потере сервера."""
         self._callbacks.append(callback)
 
-    def _notify(self) -> None:
-        """Уведомляет все callbacks об изменении списка серверов."""
+    def _schedule_notify(self) -> None:
+        """
+        Планирует уведомление коллбэков в главном потоке Qt.
+        Используем QTimer.singleShot(0, ...), чтобы выполнить
+        вызов в следующей итерации event loop Qt.
+        """
+        if self._pending_notify:
+            return  # Уже запланировано, не ставим дубликат
+
+        self._pending_notify = True
+
+        try:
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, self._do_notify)
+        except ImportError:
+            # Fallback если Qt недоступен (тесты и т.д.)
+            self._do_notify()
+
+    def _do_notify(self) -> None:
+        """Вызывает все коллбэки с текущим списком серверов (в потоке Qt)."""
+        self._pending_notify = False
+        servers_snapshot = list(self.servers.values())
         for cb in self._callbacks:
             try:
-                cb(list(self.servers.values()))
-            except Exception:
-                pass
+                cb(servers_snapshot)
+            except Exception as e:
+                print(f"[Discovery] Ошибка в callback: {e}")
 
     def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        """Вызывается при обнаружении нового сервиса."""
+        """Вызывается при обнаружении нового сервиса (из потока Zeroconf!)."""
         info = zc.get_service_info(type_, name)
         if info is None:
             return
@@ -88,16 +117,16 @@ class ServerDiscoveryListener(ServiceListener):
         )
 
         self.servers[name] = server
-        self._notify()
+        self._schedule_notify()  # Вместо прямого _notify()
 
     def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        """Вызывается при обновлении сервиса."""
+        """Вызывается при обновлении сервиса (из потока Zeroconf!)."""
         self.add_service(zc, type_, name)
 
     def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        """Вызывается при пропадании сервиса."""
+        """Вызывается при пропадании сервиса (из потока Zeroconf!)."""
         self.servers.pop(name, None)
-        self._notify()
+        self._schedule_notify()  # Вместо прямого _notify()
 
 
 class ServerDiscovery:
@@ -124,6 +153,7 @@ class ServerDiscovery:
         Args:
             on_update: Callback, вызываемый при изменении списка серверов.
                        Принимает list[DiscoveredServer].
+                       ВЫЗЫВАЕТСЯ В ГЛАВНОМ ПОТОКЕ QT (безопасно для UI).
         """
         if self._running:
             return

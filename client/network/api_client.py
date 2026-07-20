@@ -253,9 +253,13 @@ class ApiClient:
             return ApiResponse(success=False, status=0, error="Файл не найден")
 
         data = aiohttp.FormData()
+        # ИСПРАВЛЕНО: используем контекстный менеджер для файла
+        with open(path, "rb") as f:
+            file_bytes = f.read()
+
         data.add_field(
             "file",
-            open(path, "rb"),
+            file_bytes,
             filename=path.name,
             content_type="image/png",
         )
@@ -365,9 +369,15 @@ class ApiClient:
         """Простая загрузка файла."""
         data = aiohttp.FormData()
         data.add_field("chat_id", chat_id)
+
+        # ИСПРАВЛЕНО: читаем файл целиком в память, а не передаём
+        # открытый файловый дескриптор (который никогда не закрывался)
+        with open(file_path, "rb") as f:
+            file_bytes = f.read()
+
         data.add_field(
             "file",
-            open(file_path, "rb"),
+            file_bytes,
             filename=file_path.name,
         )
         if reply_to_id:

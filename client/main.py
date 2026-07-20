@@ -730,8 +730,16 @@ class MainWindow(QMainWindow):
             self._on_quit()
 
     def _on_quit(self) -> None:
-        asyncio.ensure_future(self._cleanup())
-        QApplication.instance().quit()
+        """Корректный выход из приложения."""
+        # Запускаем очистку и планируем выход после неё
+        async def _quit_after_cleanup():
+            try:
+                await self._cleanup()
+            except Exception:
+                pass
+            QApplication.instance().quit()
+
+        asyncio.ensure_future(_quit_after_cleanup())
 
     async def _cleanup(self) -> None:
         await ws_client.disconnect()

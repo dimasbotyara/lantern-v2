@@ -340,9 +340,6 @@ class MessageInput(QWidget):
 
     def _on_emoji_clicked(self) -> None:
         """Показывает пикер эмодзи."""
-        btn_pos = self._emoji_btn.mapToGlobal(QSize(0, 0).toPoint() if False else
-                                              self._emoji_btn.rect().topLeft())
-        # Позиция над кнопкой
         pos = self._emoji_btn.mapToGlobal(
             self._emoji_btn.rect().topLeft()
         )

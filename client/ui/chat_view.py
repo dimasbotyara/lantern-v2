@@ -146,36 +146,13 @@ class ChatView(QWidget):
         self._model.message_added.connect(self._on_message_added)
 
     def _init_smooth_scrolling(self) -> None:
-        """Безопасная инициализация smooth scrolling."""
-        try:
-            QScroller.grabGesture(
-                self._list_view.viewport(),
-                QScroller.LeftMouseButtonGesture
-            )
-            scroller = QScroller.scroller(self._list_view.viewport())
-            props = scroller.scrollerProperties()
-
-            # Пробуем разные варианты API
-            try:
-                # PyQt5 >= 5.15.7
-                from PyQt5.QtWidgets import QScrollerProperties
-                props.setScrollMetric(
-                    QScrollerProperties.DecelerationFactor, QVariant(0.3)
-                )
-            except (ImportError, AttributeError):
-                try:
-                    # Альтернативный путь
-                    props.setScrollMetric(
-                        QScroller.ScrollMetric.DecelerationFactor, QVariant(0.3)
-                    )
-                except AttributeError:
-                    # Старая версия PyQt5 — пропускаем настройку
-                    pass
-
-            scroller.setScrollerProperties(props)
-        except Exception:
-            # Если QScroller совсем не работает — не критично
-            pass
+        """
+        Инициализация smooth scrolling.
+        НЕ используем QScroller.grabGesture с LeftMouseButtonGesture,
+        потому что это перехватывает клики и ломает контекстное меню.
+        Плавный скролл обеспечивается кастомным wheelEvent в _ChatListView.
+        """
+        pass
 
     # ========================
     # Public API

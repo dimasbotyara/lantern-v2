@@ -31,7 +31,7 @@ import re
 from typing import Optional
 
 from PyQt5.QtWidgets import (
-    QStyledItemDelegate, QStyleOptionViewItem, QWidget, QApplication
+    QStyledItemDelegate, QStyleOptionViewItem, QWidget, QApplication, QStyle
 )
 from PyQt5.QtGui import (
     QPainter, QColor, QFont, QFontMetrics, QFontMetricsF,
@@ -609,7 +609,7 @@ class MessageDelegate(QStyledItemDelegate):
             option: QStyleOptionViewItem,
     ) -> None:
         """Рисует фон пузырька с закруглёнными углами."""
-        is_hovered = option.state & QStyleOptionViewItem.State_MouseOver
+        is_hovered = option.state & QStyle.State_MouseOver
 
         if is_own:
             bg_color = self._color_own_bg_hover if is_hovered else self._color_own_bg
