@@ -1,4 +1,4 @@
-# Lantern v2
+# 🏮 Lantern v2
 
 Lantern v2 is an encrypted LAN messenger written in Python. It includes a FastAPI-based server and a PyQt5 desktop client. The project aims to provide private, local-network chat with file transfer, stickers, polls, and WebSocket-based real-time messaging.
 
