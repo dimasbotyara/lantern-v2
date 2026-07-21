@@ -13,6 +13,7 @@ QListView с кастомным делегатом для отображения
 
 import asyncio
 from typing import Optional
+from functools import partial
 
 from PyQt5.QtWidgets import (
     QListView, QWidget, QVBoxLayout, QAbstractItemView,
@@ -202,6 +203,10 @@ class ChatView(QWidget):
                 last_read_message_id = real_messages[-(unread_count + 1)].get("id")
 
         self._model.set_last_read_message_id(last_read_message_id)
+        
+        # Очищаем кэш делегата перед загрузкой новых сообщений (避免артефактов от старого чата)
+        self._delegate.invalidate_cache()
+        
         self._model.load_messages(messages)
 
         # Показываем/скрываем пустое состояние
@@ -216,7 +221,10 @@ class ChatView(QWidget):
             self._scroll_to_unread_or_bottom()
 
     def prepend_messages(self, messages: list[dict]) -> None:
-        """Добавляет старые сообщения (при скролле вверх)."""
+        """
+        Добавляет старые сообщения в начало (при скролле вверх).
+        ГАРАНТИРУЕТ сброс флага _is_loading_more в любом случае.
+        """
         if not messages:
             self._has_more_messages = False
             self._is_loading_more = False
@@ -230,6 +238,7 @@ class ChatView(QWidget):
 
         QTimer.singleShot(10, lambda: self._restore_scroll_position(old_max, old_value))
 
+        # КРИТИЧНО: гарантируем сброс флага в любом случае
         self._is_loading_more = False
 
         if len(messages) < 50:
@@ -416,24 +425,27 @@ class ChatView(QWidget):
         msg_id = index.data(MessageRole.MessageId)
         content = index.data(MessageRole.Content) or ""
 
-        menu.reply_requested.connect(lambda: self.reply_requested.emit(msg_data))
-        menu.edit_requested.connect(lambda: self.edit_requested.emit(msg_data))
+        # Используем functools.partial вместо lambda для избежания утечек памяти
+        menu.reply_requested.connect(partial(self.reply_requested.emit, msg_data))
+        menu.edit_requested.connect(partial(self.edit_requested.emit, msg_data))
         menu.delete_requested.connect(lambda fe: self.delete_requested.emit(msg_id, fe))
         menu.reaction_requested.connect(lambda emoji: self.reaction_requested.emit(msg_id, emoji))
-        menu.pin_requested.connect(lambda: self.pin_requested.emit(msg_id, not is_pinned))
-        menu.forward_requested.connect(lambda: self.forward_requested.emit([msg_data]))
-        menu.copy_requested.connect(lambda: self._copy_to_clipboard(content))
+        menu.pin_requested.connect(partial(self.pin_requested.emit, msg_id, not is_pinned))
+        menu.forward_requested.connect(partial(self.forward_requested.emit, [msg_data]))
+        menu.copy_requested.connect(partial(self._copy_to_clipboard, content))
 
         if has_file:
-            menu.save_file_requested.connect(lambda: self.save_file_requested.emit(file_att))
+            menu.save_file_requested.connect(partial(self.save_file_requested.emit, file_att))
             menu.open_in_folder_requested.connect(
-                lambda: self.open_in_folder_requested.emit(file_att)
+                partial(self.open_in_folder_requested.emit, file_att)
             )
             if is_image:
                 menu.copy_image_requested.connect(
-                    lambda: self.copy_image_requested.emit(file_att)
+                    partial(self.copy_image_requested.emit, file_att)
                 )
 
+        # Очищаем меню после его закрытия (избегаем утечек памяти)
+        menu.aboutToHide.connect(menu.deleteLater)
         menu.show_at_cursor()
 
     def _copy_to_clipboard(self, text: str) -> None:

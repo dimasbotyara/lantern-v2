@@ -156,19 +156,25 @@ class MessageModel(QAbstractListModel):
     def prepend_messages(self, messages: list[dict]) -> None:
         """
         Добавляет старые сообщения в начало (при скролле вверх).
+        Правильно обрабатывает дубликаты разделителей.
         """
         if not messages:
             return
 
         processed = self._process_messages(messages)
 
-        # Убираем дубликат разделителя дат если совпадает с текущим первым
+        # Удаляем дубликат разделителя дат если совпадает с текущим первым элементом
+        # Проверяем оба вида разделителей (дата и непрочитанные)
         if self._items and processed:
             last_new = processed[-1]
             first_existing = self._items[0]
-            if (last_new.get("__item_type") == "date_separator" and
-                    first_existing.get("__item_type") == "date_separator" and
-                    last_new.get("__separator_text") == first_existing.get("__separator_text")):
+            
+            both_are_separators = (
+                last_new.get("__item_type") in ("date_separator", "unread_separator") and
+                first_existing.get("__item_type") in ("date_separator", "unread_separator")
+            )
+            
+            if both_are_separators and last_new.get("__separator_text") == first_existing.get("__separator_text"):
                 processed.pop()
 
         if not processed:
