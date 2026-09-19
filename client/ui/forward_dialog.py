@@ -14,6 +14,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 
 from client.ui.components.avatar import AvatarWidget
+from client.themes.fonts import get_font_family
 from client.themes.catppuccin import Palette, AccentColor
 
 
@@ -109,7 +110,7 @@ class ForwardDialog(QDialog):
             row.addWidget(avatar)
 
             label = QLabel(f"{icon} {name}")
-            label.setFont(QFont("Segoe UI", 13))
+            label.setFont(QFont(get_font_family("ui"), 13))
             row.addWidget(label, 1)
 
             self._list.addItem(item)

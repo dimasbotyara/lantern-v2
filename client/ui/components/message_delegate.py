@@ -44,6 +44,7 @@ from PyQt5.QtCore import (
 
 from client.ui.components.message_model import MessageRole
 from client.utils.helpers import format_timestamp, format_file_size, get_file_icon
+from client.themes.fonts import get_font_family
 from client.themes.catppuccin import get_palette, Palette, AccentColor
 
 
@@ -98,20 +99,20 @@ class MessageDelegate(QStyledItemDelegate):
         self._current_user_id = current_user_id
 
         # Шрифты (кэшируем)
-        self._font_author = QFont("Segoe UI", self.AUTHOR_FONT_SIZE, QFont.DemiBold)
-        self._font_text = QFont("Segoe UI", self.TEXT_FONT_SIZE)
-        self._font_timestamp = QFont("Segoe UI", self.TIMESTAMP_FONT_SIZE)
-        self._font_reply_author = QFont("Segoe UI", self.REPLY_FONT_SIZE, QFont.DemiBold)
-        self._font_reply_text = QFont("Segoe UI", self.REPLY_FONT_SIZE)
-        self._font_reaction = QFont("Segoe UI Emoji", self.REACTION_FONT_SIZE)
-        self._font_separator = QFont("Segoe UI", 12, QFont.DemiBold)
-        self._font_edited = QFont("Segoe UI", self.TIMESTAMP_FONT_SIZE, italic=True)
-        self._font_forwarded = QFont("Segoe UI", self.FORWARDED_FONT_SIZE, italic=True)
-        self._font_file_name = QFont("Segoe UI", 13, QFont.DemiBold)
-        self._font_file_size = QFont("Segoe UI", 11)
-        self._font_code = QFont("Cascadia Code", 13)
+        self._font_author = QFont(get_font_family("ui"), self.AUTHOR_FONT_SIZE, QFont.DemiBold)
+        self._font_text = QFont(get_font_family("ui"), self.TEXT_FONT_SIZE)
+        self._font_timestamp = QFont(get_font_family("ui"), self.TIMESTAMP_FONT_SIZE)
+        self._font_reply_author = QFont(get_font_family("ui"), self.REPLY_FONT_SIZE, QFont.DemiBold)
+        self._font_reply_text = QFont(get_font_family("ui"), self.REPLY_FONT_SIZE)
+        self._font_reaction = QFont(get_font_family("emoji"), self.REACTION_FONT_SIZE)
+        self._font_separator = QFont(get_font_family("ui"), 12, QFont.DemiBold)
+        self._font_edited = QFont(get_font_family("ui"), self.TIMESTAMP_FONT_SIZE, italic=True)
+        self._font_forwarded = QFont(get_font_family("ui"), self.FORWARDED_FONT_SIZE, italic=True)
+        self._font_file_name = QFont(get_font_family("ui"), 13, QFont.DemiBold)
+        self._font_file_size = QFont(get_font_family("ui"), 11)
+        self._font_code = QFont(get_font_family("code"), 13)
         if not QFontMetrics(self._font_code).height():
-            self._font_code = QFont("Consolas", 13)
+            self._font_code = QFont(get_font_family("code"), 13)
             if not QFontMetrics(self._font_code).height():
                 self._font_code = QFont("monospace", 13)
 
@@ -359,7 +360,7 @@ class MessageDelegate(QStyledItemDelegate):
         height = 0
         # Вопрос
         doc = QTextDocument()
-        doc.setDefaultFont(QFont("Segoe UI", 15, QFont.DemiBold))
+        doc.setDefaultFont(QFont(get_font_family("ui"), 15, QFont.DemiBold))
         doc.setTextWidth(max_width)
         doc.setPlainText(poll.get("question", ""))
         height += int(doc.size().height()) + 8
@@ -563,7 +564,7 @@ class MessageDelegate(QStyledItemDelegate):
 
         # Иконка закреплённого
         if is_pinned:
-            painter.setFont(QFont("Segoe UI Emoji", 10))
+            painter.setFont(QFont(get_font_family("emoji"), 10))
             painter.setPen(self._color_accent)
             pin_x = bubble_x + bubble_width - 24
             painter.drawText(QPointF(pin_x, bubble_y + 14), "📌")
@@ -684,7 +685,7 @@ class MessageDelegate(QStyledItemDelegate):
         nick_color = QColor(author.get("nick_color", self._accent.hex))
 
         painter.setPen(nick_color)
-        font = QFont("Segoe UI", int(size * 0.4), QFont.Bold)
+        font = QFont(get_font_family("ui"), int(size * 0.4), QFont.Bold)
         painter.setFont(font)
         painter.drawText(rect.toRect(), Qt.AlignCenter, letter)
 
@@ -832,7 +833,7 @@ class MessageDelegate(QStyledItemDelegate):
             painter.drawPath(path)
 
             # Иконка по центру
-            painter.setFont(QFont("Segoe UI Emoji", 28))
+            painter.setFont(QFont(get_font_family("emoji"), 28))
             painter.setPen(self._color_subtext)
             painter.drawText(img_rect.toRect(), Qt.AlignCenter, "🖼️")
 
@@ -851,7 +852,7 @@ class MessageDelegate(QStyledItemDelegate):
             filesize = format_file_size(file_att.get("file_size", 0))
 
             # Иконка
-            painter.setFont(QFont("Segoe UI Emoji", 22))
+            painter.setFont(QFont(get_font_family("emoji"), 22))
             painter.setPen(self._color_text)
             painter.drawText(QRectF(x + 10, y + 6, 40, 40), Qt.AlignCenter, icon)
 
@@ -891,11 +892,11 @@ class MessageDelegate(QStyledItemDelegate):
         """Рисует опрос."""
         # Вопрос
         question = poll.get("question", "")
-        painter.setFont(QFont("Segoe UI", 15, QFont.DemiBold))
+        painter.setFont(QFont(get_font_family("ui"), 15, QFont.DemiBold))
         painter.setPen(self._color_text)
 
         doc = QTextDocument()
-        doc.setDefaultFont(QFont("Segoe UI", 15, QFont.DemiBold))
+        doc.setDefaultFont(QFont(get_font_family("ui"), 15, QFont.DemiBold))
         doc.setTextWidth(max_width)
         doc.setPlainText(question)
         q_height = int(doc.size().height())
@@ -1096,7 +1097,7 @@ class MessageDelegate(QStyledItemDelegate):
         painter.setBrush(QColor(0, 0, 0, 10))
         painter.drawPath(path)
 
-        painter.setFont(QFont("Segoe UI Emoji", 40))
+        painter.setFont(QFont(get_font_family("emoji"), 40))
         painter.setPen(self._color_text)
         painter.drawText(sticker_rect.toRect(), Qt.AlignCenter, "🎨")
 
@@ -1218,7 +1219,7 @@ class MessageDelegate(QStyledItemDelegate):
                 f'<pre style="background-color: {self._palette.mantle}; '
                 f'color: {self._palette.text}; '
                 f'padding: 8px 12px; border-radius: 6px; '
-                f'font-family: Cascadia Code, Consolas, monospace; '
+                f'font-family: {get_font_css_stack("code")}; '
                 f'font-size: 13px; white-space: pre-wrap;">'
                 f'{m.group(1)}</pre>'
             ),
@@ -1232,7 +1233,7 @@ class MessageDelegate(QStyledItemDelegate):
             lambda m: (
                 f'<code style="background-color: {self._palette.mantle}; '
                 f'padding: 2px 6px; border-radius: 4px; '
-                f'font-family: Cascadia Code, Consolas, monospace; '
+                f'font-family: {get_font_css_stack("code")}; '
                 f'font-size: 13px;">{m.group(1)}</code>'
             ),
             text,

@@ -33,6 +33,7 @@ from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QSettings
 import qasync
 
 from client.config import ClientConfig, AuthTokenStorage, CONFIG_DIR
+from client.themes.fonts import get_font_family
 from client.themes.catppuccin import get_palette, PALETTES
 from client.themes.stylesheet import generate_stylesheet
 from client.network.api_client import api_client
@@ -148,26 +149,26 @@ class MainWindow(QMainWindow):
         empty_layout.setAlignment(Qt.AlignCenter)
 
         logo = QLabel("🏮")
-        logo.setFont(QFont("Segoe UI Emoji", 64))
+        logo.setFont(QFont(get_font_family("emoji"), 64))
         logo.setAlignment(Qt.AlignCenter)
         empty_layout.addWidget(logo)
 
         title = QLabel("Lantern v2")
         title.setObjectName("appTitle")
         title.setAlignment(Qt.AlignCenter)
-        title.setFont(QFont("Segoe UI", 28, QFont.Bold))
+        title.setFont(QFont(get_font_family("ui"), 28, QFont.Bold))
         empty_layout.addWidget(title)
 
         subtitle = QLabel("Выберите чат, чтобы начать общение")
         subtitle.setObjectName("subtitleLabel")
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setFont(QFont("Segoe UI", 14))
+        subtitle.setFont(QFont(get_font_family("ui"), 14))
         empty_layout.addWidget(subtitle)
 
         credit = QLabel("Made by dimasbotyara")
         credit.setObjectName("mutedLabel")
         credit.setAlignment(Qt.AlignCenter)
-        credit.setFont(QFont("Segoe UI", 11))
+        credit.setFont(QFont(get_font_family("ui"), 11))
         empty_layout.addSpacing(20)
         empty_layout.addWidget(credit)
 
@@ -256,7 +257,7 @@ class MainWindow(QMainWindow):
         btn.setObjectName("iconButton")
         btn.setCursor(Qt.PointingHandCursor)
         btn.setToolTip(tooltip)
-        btn.setFont(QFont("Segoe UI Emoji", 14))
+        btn.setFont(QFont(get_font_family("emoji"), 14))
         btn.setFixedSize(36, 36)
         return btn
 
@@ -302,7 +303,14 @@ class MainWindow(QMainWindow):
     # ========================
 
     def _apply_theme(self) -> None:
-        qss = generate_stylesheet(self._palette.name, self._accent.name)
+        qss = generate_stylesheet(
+            self._palette.name,
+            self._accent.name,
+            ui_font=self._config.theme.ui_font,
+            ui_font_size=self._config.theme.ui_font_size,
+            code_font=self._config.theme.code_font,
+            code_font_size=self._config.theme.code_font_size,
+        )
         QApplication.instance().setStyleSheet(qss)
 
     # ========================
@@ -875,6 +883,10 @@ def run_client():
     app = QApplication(sys.argv)
     app.setApplicationName("Lantern v2")
     app.setOrganizationName("Lantern")
+
+    # Загружаем шрифты ПОСЛЕ QApplication, ДО MainWindow
+    from client.themes.fonts import load_all_fonts
+    load_all_fonts()
 
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)

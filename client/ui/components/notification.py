@@ -6,6 +6,7 @@ Lantern v2 — Notification System
 import sys
 import asyncio
 from typing import Optional
+from client.themes.fonts import get_font_family
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QVBoxLayout,
@@ -62,7 +63,7 @@ class ToastNotification(QWidget):
 
         # Эмодзи
         emoji_label = QLabel(emoji)
-        emoji_label.setFont(QFont("Segoe UI Emoji", 24))
+        emoji_label.setFont(QFont(get_font_family("emoji"), 24))
         emoji_label.setAlignment(Qt.AlignTop)
         emoji_label.setFixedWidth(36)
         layout.addWidget(emoji_label)

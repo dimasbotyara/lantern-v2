@@ -25,6 +25,7 @@ from PyQt5.QtCore import (
     QEasingCurve, QTimer, QPoint
 )
 
+from client.themes.fonts import get_font_family
 from client.themes.catppuccin import get_palette, Palette, AccentColor, PALETTES
 from client.network.discovery import ServerDiscovery, DiscoveredServer
 
@@ -253,7 +254,7 @@ class LoginWidget(QWidget):
         # === Кнопка входа/регистрации ===
         self._submit_btn = QPushButton("Войти")
         self._submit_btn.setCursor(Qt.PointingHandCursor)
-        self._submit_btn.setFont(QFont("Segoe UI", 14, QFont.DemiBold))
+        self._submit_btn.setFont(QFont(get_font_family("ui"), 14, QFont.DemiBold))
         self._submit_btn.setMinimumHeight(44)
         self._submit_btn.clicked.connect(self._on_submit)
         card_layout.addWidget(self._submit_btn)

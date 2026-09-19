@@ -5,19 +5,35 @@ Lantern v2 — QSS Stylesheet Generator
 """
 
 from client.themes.catppuccin import Palette, AccentColor, get_palette
-
+from typing import Optional
 
 class StyleSheetGenerator:
     """
     Генератор QSS-стилей для всего приложения.
 
-    Принимает палитру и акцентный цвет, возвращает полный QSS.
+    Принимает палитру, акцентный цвет и настройки шрифтов.
     Все размеры, отступы, скругления и цвета — в одном месте.
     """
 
-    def __init__(self, palette: Palette, accent: AccentColor):
+    def __init__(
+        self,
+        palette: Palette,
+        accent: AccentColor,
+        ui_font: Optional[str] = None,
+        ui_font_size: int = 14,
+        code_font: Optional[str] = None,
+        code_font_size: int = 13,
+    ):
         self.p = palette
         self.a = accent
+        self.ui_font_size = ui_font_size
+        self.code_font_size = code_font_size
+
+        # Ленивый импорт — избегаем циклической зависимости
+        from client.themes.fonts import get_font_css_stack
+        self.ui_font_css = get_font_css_stack("ui", ui_font)
+        self.code_font_css = get_font_css_stack("code", code_font)
+        self.emoji_font_css = get_font_css_stack("emoji")
 
     def generate(self) -> str:
         """Генерирует полный QSS для приложения."""
@@ -67,8 +83,8 @@ class StyleSheetGenerator:
 QWidget {{
     background-color: {self.p.base};
     color: {self.p.text};
-    font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", "Noto Sans", "Noto Color Emoji", sans-serif;
-    font-size: 14px;
+    font-family: {self.ui_font_css};
+    font-size: {self.ui_font_size}px;
     selection-background-color: {self.a.hex};
     selection-color: {self.p.crust};
 }}
@@ -1552,20 +1568,38 @@ QComboBox QAbstractItemView {{
 # Convenience Function
 # ========================
 
-def generate_stylesheet(palette_name: str = "mocha", accent_name: str = "mauve") -> str:
+def generate_stylesheet(
+    palette_name: str = "mocha",
+    accent_name: str = "mauve",
+    ui_font: Optional[str] = None,
+    ui_font_size: int = 14,
+    code_font: Optional[str] = None,
+    code_font_size: int = 13,
+) -> str:
     """
-    Генерирует полный QSS для указанной палитры и акцента.
+    Генерирует полный QSS для указанной палитры, акцента и шрифтов.
 
     Args:
         palette_name: Имя палитры (latte/frappe/macchiato/mocha).
         accent_name: Имя акцентного цвета (mauve/blue/green/...).
+        ui_font: Логическое имя UI-шрифта ("Inter", "IBMPlexSans", ...).
+                 None — использовать дефолт (Inter).
+        ui_font_size: Размер UI-шрифта в пикселях.
+        code_font: Логическое имя code-шрифта ("FiraCode", ...).
+        code_font_size: Размер code-шрифта.
 
     Returns:
         Полная QSS-строка для QApplication.setStyleSheet().
     """
     palette = get_palette(palette_name)
     accent = palette.get_accent(accent_name)
-    generator = StyleSheetGenerator(palette, accent)
+    generator = StyleSheetGenerator(
+        palette, accent,
+        ui_font=ui_font,
+        ui_font_size=ui_font_size,
+        code_font=code_font,
+        code_font_size=code_font_size,
+    )
     return generator.generate()
 
 

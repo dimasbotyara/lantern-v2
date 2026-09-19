@@ -18,10 +18,16 @@ EMOJI_CACHE_DIR = CONFIG_DIR / "emoji_cache"
 @dataclass
 class ThemeConfig:
     """Настройки темы."""
-    palette: str = "mocha"  # latte, frappe, macchiato, mocha
-    accent_color: str = "mauve"  # rosewater, flamingo, pink, mauve, red, maroon, peach, yellow, green, teal, sky, sapphire, blue, lavender
+    palette: str = "mocha"
+    accent_color: str = "mauve"
     animations_enabled: bool = True
-    animation_speed: float = 1.0  # множитель скорости (0.5 = медленнее, 2.0 = быстрее)
+    animation_speed: float = 1.0
+
+    # Шрифты
+    ui_font: str = "Inter"          # Семейство шрифта для интерфейса
+    ui_font_size: int = 14          # Размер UI-шрифта
+    code_font: str = "FiraCode"     # Семейство для блоков кода
+    code_font_size: int = 13        # Размер code-шрифта
 
 
 @dataclass

@@ -23,6 +23,7 @@ from PyQt5.QtCore import (
 )
 
 from client.ui.components.avatar import AvatarWidget
+from client.themes.fonts import get_font_family
 from client.themes.catppuccin import Palette, AccentColor
 from client.utils.helpers import (
     format_timestamp, truncate_text, status_to_display
@@ -88,7 +89,7 @@ class ChatListSidebar(QWidget):
 
         self._user_name_label = QLabel("Lantern v2")
         self._user_name_label.setObjectName("chatItemName")
-        self._user_name_label.setFont(QFont("Segoe UI", 14, QFont.DemiBold))
+        self._user_name_label.setFont(QFont(get_font_family("ui"), 14, QFont.DemiBold))
         user_info.addWidget(self._user_name_label)
 
         self._user_status_label = QLabel("Не подключено")
@@ -129,7 +130,7 @@ class ChatListSidebar(QWidget):
         self._new_chat_btn.setObjectName("iconButton")
         self._new_chat_btn.setCursor(Qt.PointingHandCursor)
         self._new_chat_btn.setToolTip("Новый чат")
-        self._new_chat_btn.setFont(QFont("Segoe UI", 16))
+        self._new_chat_btn.setFont(QFont(get_font_family("ui"), 16))
         self._new_chat_btn.setFixedSize(36, 36)
         self._new_chat_btn.clicked.connect(self.new_chat_requested.emit)
         search_row.addWidget(self._new_chat_btn)
@@ -155,7 +156,7 @@ class ChatListSidebar(QWidget):
         self._settings_btn = QPushButton("⚙️ Настройки")
         self._settings_btn.setObjectName("ghostButton")
         self._settings_btn.setCursor(Qt.PointingHandCursor)
-        self._settings_btn.setFont(QFont("Segoe UI", 13))
+        self._settings_btn.setFont(QFont(get_font_family("ui"), 13))
         self._settings_btn.clicked.connect(self.settings_requested.emit)
         footer_layout.addWidget(self._settings_btn)
 
@@ -332,7 +333,7 @@ class ChatListSidebar(QWidget):
 
         name_label = QLabel(chat_name or "Chat")
         name_label.setObjectName("chatItemName")
-        name_label.setFont(QFont("Segoe UI", 13, QFont.DemiBold))
+        name_label.setFont(QFont(get_font_family("ui"), 13, QFont.DemiBold))
         top_row.addWidget(name_label, 1)
 
         # Время последнего сообщения
@@ -428,7 +429,7 @@ class ChatListSidebar(QWidget):
 
         for emoji, text, status_value in statuses:
             action = QAction(f"{emoji}  {text}", menu)
-            action.setFont(QFont("Segoe UI", 13))
+            action.setFont(QFont(get_font_family("ui"), 13))
             action.triggered.connect(
                 lambda checked, s=status_value: self.status_change_requested.emit(s)
             )

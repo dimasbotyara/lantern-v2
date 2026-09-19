@@ -32,6 +32,7 @@ from PyQt5.QtCore import (
 
 from client.ui.components.reply_preview import ReplyPreviewBar
 from client.ui.components.emoji_picker import EmojiPicker
+from client.themes.fonts import get_font_family
 from client.themes.catppuccin import Palette, AccentColor
 
 
@@ -125,7 +126,7 @@ class MessageInput(QWidget):
         self._attach_btn.setObjectName("iconButton")
         self._attach_btn.setCursor(Qt.PointingHandCursor)
         self._attach_btn.setToolTip("Прикрепить файл")
-        self._attach_btn.setFont(QFont("Segoe UI Emoji", 16))
+        self._attach_btn.setFont(QFont(get_font_family("emoji"), 16))
         self._attach_btn.setFixedSize(40, 40)
         input_row.addWidget(self._attach_btn)
 
@@ -133,7 +134,7 @@ class MessageInput(QWidget):
         self._text_edit = _AutoResizeTextEdit(self._palette, self._accent)
         self._text_edit.setObjectName("messageInput")
         self._text_edit.setPlaceholderText("Написать сообщение...")
-        self._text_edit.setFont(QFont("Segoe UI", 14))
+        self._text_edit.setFont(QFont(get_font_family("ui"), 14))
         self._text_edit.setFixedHeight(self.SINGLE_LINE_HEIGHT)
         self._text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
@@ -157,7 +158,7 @@ class MessageInput(QWidget):
         self._emoji_btn.setObjectName("iconButton")
         self._emoji_btn.setCursor(Qt.PointingHandCursor)
         self._emoji_btn.setToolTip("Эмодзи")
-        self._emoji_btn.setFont(QFont("Segoe UI Emoji", 16))
+        self._emoji_btn.setFont(QFont(get_font_family("emoji"), 16))
         self._emoji_btn.setFixedSize(36, 36)
         buttons_row.addWidget(self._emoji_btn)
 
@@ -166,7 +167,7 @@ class MessageInput(QWidget):
         self._send_btn.setObjectName("sendButton")
         self._send_btn.setCursor(Qt.PointingHandCursor)
         self._send_btn.setToolTip("Отправить (Enter)")
-        self._send_btn.setFont(QFont("Segoe UI", 16))
+        self._send_btn.setFont(QFont(get_font_family("ui"), 16))
         self._send_btn.setEnabled(False)
         buttons_row.addWidget(self._send_btn)
 

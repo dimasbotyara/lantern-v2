@@ -15,6 +15,7 @@ from PyQt5.QtGui import (
 )
 from PyQt5.QtCore import Qt, QSize, QRect, QRectF, pyqtSignal, QPropertyAnimation, QEasingCurve
 
+from client.themes.fonts import get_font_family
 from client.themes.catppuccin import get_palette, AccentColor
 
 
@@ -142,7 +143,7 @@ class AvatarWidget(QWidget):
             painter.setPen(QColor(self._accent_color))
 
             font_size = max(10, int(size * 0.45))
-            font = QFont("Segoe UI", font_size, QFont.Bold)
+            font = QFont(get_font_family("ui"), font_size, QFont.Bold)
             painter.setFont(font)
             painter.drawText(rect.toRect(), Qt.AlignCenter, self._initials)
 

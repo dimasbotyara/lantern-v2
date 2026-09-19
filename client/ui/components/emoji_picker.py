@@ -4,6 +4,7 @@ Lantern v2 — Emoji Picker Widget
 """
 
 from typing import Optional
+from client.themes.fonts import get_font_family
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -121,8 +122,8 @@ class EmojiPicker(QWidget):
         self._tab_widget.setTabPosition(QTabWidget.South)
 
         # Emoji font
-        self._emoji_font = QFont("Segoe UI Emoji", 20)
-        self._tab_font = QFont("Segoe UI Emoji", 14)
+        self._emoji_font = QFont(get_font_family("emoji"), 20)
+        self._tab_font = QFont(get_font_family("emoji"), 14)
 
         for category_name, emojis in EMOJI_CATEGORIES.items():
             scroll = self._create_emoji_grid(emojis)

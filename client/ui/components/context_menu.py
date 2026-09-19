@@ -5,6 +5,7 @@ Lantern v2 — Context Menu
 """
 
 from typing import Optional, Callable
+from client.themes.fonts import get_font_family
 
 from PyQt5.QtWidgets import (
     QMenu, QAction, QWidget, QHBoxLayout, QVBoxLayout,
@@ -47,7 +48,7 @@ class ReactionBarWidget(QWidget):
             btn.setObjectName("reactionButton")
             btn.setCursor(Qt.PointingHandCursor)
             btn.setToolTip(f"Реакция {emoji}")
-            btn.setFont(QFont("Segoe UI Emoji", 16))
+            btn.setFont(QFont(get_font_family("emoji"), 16))
             btn.clicked.connect(lambda checked, e=emoji: self.reaction_selected.emit(e))
             layout.addWidget(btn)
 
@@ -56,7 +57,7 @@ class ReactionBarWidget(QWidget):
         more_btn.setObjectName("reactionButton")
         more_btn.setCursor(Qt.PointingHandCursor)
         more_btn.setToolTip("Все реакции")
-        more_btn.setFont(QFont("Segoe UI Emoji", 14))
+        more_btn.setFont(QFont(get_font_family("emoji"), 14))
         more_btn.clicked.connect(lambda: self.reaction_selected.emit("__more__"))
         layout.addWidget(more_btn)
 
@@ -99,7 +100,7 @@ class ExpandedReactionPicker(QWidget):
             btn = QPushButton(emoji)
             btn.setObjectName("emojiButton")
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFont(QFont("Segoe UI Emoji", 16))
+            btn.setFont(QFont(get_font_family("emoji"), 16))
             btn.clicked.connect(lambda checked, e=emoji: self._select(e))
             columns[col_idx].addWidget(btn)
 
@@ -216,7 +217,7 @@ class MessageContextMenu(QMenu):
     ) -> QAction:
         """Добавляет пункт меню с эмодзи-иконкой."""
         action = QAction(f"{emoji}  {text}", self)
-        action.setFont(QFont("Segoe UI", 13))
+        action.setFont(QFont(get_font_family("ui"), 13))
         action.triggered.connect(callback)
         action.triggered.connect(self.close)
         self.addAction(action)

@@ -7,6 +7,7 @@ Lantern v2 — Connection Status Bar
 """
 
 from typing import Optional
+from client.themes.fonts import get_font_family
 
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QGraphicsOpacityEffect
@@ -58,7 +59,7 @@ class ConnectionBar(QWidget):
         # Луна
         self._moon_label = QLabel(self.MOON_PHASES[0])
         self._moon_label.setObjectName("connectionMoon")
-        self._moon_label.setFont(QFont("Segoe UI Emoji", 14))
+        self._moon_label.setFont(QFont(get_font_family("emoji"), 14))
         self._moon_label.setAlignment(Qt.AlignCenter)
         self._moon_label.setFixedWidth(28)
         layout.addWidget(self._moon_label)

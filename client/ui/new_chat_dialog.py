@@ -14,6 +14,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 
 from client.ui.components.avatar import AvatarWidget
+from client.themes.fonts import get_font_family
 from client.themes.catppuccin import Palette, AccentColor
 from client.utils.helpers import status_to_display
 
@@ -97,7 +98,7 @@ class NewChatDialog(QDialog):
             info = QVBoxLayout()
             info.setSpacing(0)
             name = QLabel(display_name)
-            name.setFont(QFont("Segoe UI", 13, QFont.DemiBold))
+            name.setFont(QFont(get_font_family("ui"), 13, QFont.DemiBold))
             name.setStyleSheet(f"color: {nick_color};")
             info.addWidget(name)
 
