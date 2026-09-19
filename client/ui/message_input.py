@@ -14,6 +14,7 @@ Lantern v2 — Message Input Widget
 
 import asyncio
 from typing import Optional
+from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
@@ -50,6 +51,7 @@ class MessageInput(QWidget):
     # Сигналы
     message_submitted = pyqtSignal(str, str)  # content, reply_to_id (or "")
     file_attach_requested = pyqtSignal()  # Открыть диалог выбора файла
+    file_upload_requested = pyqtSignal(str, str)
     typing_started = pyqtSignal()  # Пользователь печатает
     emoji_picker_requested = pyqtSignal(object)  # QPoint position
     sticker_picker_requested = pyqtSignal(object)  # QPoint position
@@ -348,7 +350,10 @@ class MessageInput(QWidget):
         self.emoji_picker_requested.emit(pos)
 
     def _show_too_long_dialog(self, text: str) -> None:
-        """Предлагает варианты при превышении лимита."""
+        """
+        Предлагает варианты при превышении лимита.
+        Использует неблокирующий .open() вместо .exec_().
+        """
         msg = QMessageBox(self)
         msg.setWindowTitle("Сообщение слишком длинное")
         msg.setText(
@@ -361,43 +366,75 @@ class MessageInput(QWidget):
         split_btn = msg.addButton("✂️ Разделить", QMessageBox.ActionRole)
         cancel_btn = msg.addButton("Отмена", QMessageBox.RejectRole)
 
-        msg.exec_()
+        def on_finished(result: int) -> None:
+            clicked = msg.clickedButton()
+            if clicked == send_txt_btn:
+                self._send_as_txt(text)
+            elif clicked == split_btn:
+                self._split_and_send(text)
+            msg.deleteLater()
 
-        clicked = msg.clickedButton()
-        if clicked == send_txt_btn:
-            self._send_as_txt(text)
-        elif clicked == split_btn:
-            self._split_and_send(text)
+        msg.finished.connect(on_finished)
+        msg.open()
 
     def _send_as_txt(self, text: str) -> None:
-        """Отправляет длинный текст как .txt файл."""
+        """
+        Отправляет длинный текст как .txt файл.
+
+        Сохраняет текст во временный файл и эмитит сигнал
+        file_upload_requested — MainWindow сам загрузит его
+        через file_transfer_manager, как обычное вложение.
+        """
         import tempfile
-        import os
+        from datetime import datetime
 
-        tmp_path = os.path.join(tempfile.gettempdir(), "lantern_message.txt")
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(text)
+        # Формируем красивое имя файла
+        timestamp = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+        filename = f"Сообщение от {timestamp}.txt"
 
-        # Эмитим сигнал прикрепления файла
-        # TODO: автоматическая отправка tmp файла
+        # Создаём временный файл в системной tmp-директории
+        tmp_dir = Path(tempfile.gettempdir()) / "lantern_v2"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = tmp_dir / filename
+
+        try:
+            tmp_path.write_text(text, encoding="utf-8")
+        except OSError as e:
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                f"Не удалось сохранить файл:\n{e}",
+            )
+            return
+
+        # Запоминаем reply_id — если пользователь отвечал на кого-то,
+        # .txt тоже уйдёт как ответ
+        reply_id = self._reply_message_id or ""
+
+        # Эмитим сигнал — MainWindow подхватит
+        self.file_upload_requested.emit(str(tmp_path), reply_id)
+
+        # Очищаем поле ввода и сбрасываем reply
         self._text_edit.clear()
+        self.cancel_reply()
 
     def _split_and_send(self, text: str) -> None:
-        """Разделяет длинное сообщение на части."""
+        """
+        Разделяет длинное сообщение на части и отправляет их
+        последовательно с небольшой задержкой между отправками.
+        """
         chunks = []
         while text:
             if len(text) <= self.MAX_CHARS:
                 chunks.append(text)
                 break
 
-            # Ищем хорошее место для разрыва
             split_pos = self.MAX_CHARS
             # Пробуем разбить по переносу строки
             newline_pos = text.rfind('\n', 0, split_pos)
             if newline_pos > split_pos * 0.5:
                 split_pos = newline_pos + 1
             else:
-                # Пробуем по пробелу
                 space_pos = text.rfind(' ', 0, split_pos)
                 if space_pos > split_pos * 0.5:
                     split_pos = space_pos + 1
@@ -407,13 +444,17 @@ class MessageInput(QWidget):
 
         reply_id = self._reply_message_id or ""
 
-        # Отправляем первую часть с reply
+        # Отправляем первую часть с reply, остальные — без,
+        # с небольшой задержкой чтобы порядок сохранился
         if chunks:
             self.message_submitted.emit(chunks[0], reply_id)
 
-        # Остальные без reply
-        for chunk in chunks[1:]:
-            self.message_submitted.emit(chunk, "")
+        for i, chunk in enumerate(chunks[1:], start=1):
+            # QTimer.singleShot(i * 100, ...) — отправить через i*100 мс
+            QTimer.singleShot(
+                i * 100,
+                lambda c=chunk: self.message_submitted.emit(c, ""),
+            )
 
         self._text_edit.clear()
         self.cancel_reply()

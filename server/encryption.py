@@ -15,6 +15,7 @@ import shutil
 import sys
 from pathlib import Path
 from cryptography.fernet import Fernet
+from typing import Optional
 
 from server.config import config
 
@@ -65,9 +66,9 @@ class EncryptionManager:
                 return key
 
         # 3. Нет ключа вообще — проверяем, есть ли БД
-        db_path = Path(config.database_url.replace("sqlite+aiosqlite:///", "").lstrip("./"))
+        db_path = self._extract_sqlite_path(config.database_url)
 
-        if db_path.exists() and db_path.stat().st_size > 0:
+        if db_path is not None and db_path.exists() and db_path.stat().st_size > 0:
             # БД есть, но ключа нет — КРИТИЧЕСКАЯ ОШИБКА
             print("=" * 60)
             print("  ❌ КРИТИЧЕСКАЯ ОШИБКА: КЛЮЧ ШИФРОВАНИЯ ПОТЕРЯН!")
@@ -99,6 +100,22 @@ class EncryptionManager:
         print(f"[Encryption] ⚠️  ВАЖНО: НЕ УДАЛЯЙТЕ файл {key_path}")
 
         return key
+
+    @staticmethod
+    def _extract_sqlite_path(database_url: str) -> Optional[Path]:
+        """
+        Извлекает путь к SQLite-файлу из database_url.
+        Возвращает None, если это не SQLite.
+        """
+        prefix = "sqlite+aiosqlite:///"
+        if not database_url.startswith(prefix):
+            return None  # Не SQLite — не можем проверить существование БД
+
+        raw_path = database_url[len(prefix):]
+        # Убираем возможные "./" в начале
+        if raw_path.startswith("./"):
+            raw_path = raw_path[2:]
+        return Path(raw_path) if raw_path else None
 
     def _read_and_validate(self, path: Path) -> bytes | None:
         """Читает ключ из файла и валидирует."""

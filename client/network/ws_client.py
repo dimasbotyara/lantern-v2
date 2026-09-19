@@ -30,6 +30,7 @@ class WSCallbacks:
     on_reconnecting: Optional[Callable] = None          # принимает int (attempt)
     on_reconnected: Optional[Callable] = None
     on_connection_failed: Optional[Callable] = None      # принимает str (error)
+    on_kicked: Optional[Callable] = None
 
     # Сообщения
     on_new_message: Optional[Callable] = None             # принимает dict
@@ -213,6 +214,9 @@ class WebSocketClient:
 
     async def _receive_loop(self) -> None:
         """Основной цикл приёма сообщений."""
+        kicked = False  # ← флаг: нас выкинули осознанно?
+        kick_reason = ""
+
         try:
             async for msg in self._ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
@@ -220,14 +224,33 @@ class WebSocketClient:
                 elif msg.type == aiohttp.WSMsgType.ERROR:
                     print(f"[WS] Ошибка: {self._ws.exception()}")
                     break
-                elif msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING):
+                elif msg.type == aiohttp.WSMsgType.CLOSE:
+                    # Проверяем код закрытия
+                    close_code = msg.data  # int
+                    close_reason = msg.extra  # str
+
+                    if close_code == 4001:
+                        kicked = True
+                        kick_reason = close_reason or "Вход с другого клиента"
+                        print(f"[WS] Кикнут сервером: {kick_reason}")
+                    break
+                elif msg.type == aiohttp.WSMsgType.CLOSING:
                     break
         except asyncio.CancelledError:
             return
         except Exception as e:
             print(f"[WS] Ошибка в receive loop: {e}")
 
-        # Соединение потеряно
+        # Если нас выкинули осознанно — не переподключаемся
+        if kicked:
+            self._should_reconnect = False
+            self._state = WSState.DISCONNECTED
+
+            if self._callbacks.on_kicked:
+                self._callbacks.on_kicked(kick_reason)
+            return
+
+        # Иначе — обычная потеря связи, пытаемся переподключиться
         if self._should_reconnect:
             await self._start_reconnecting()
 

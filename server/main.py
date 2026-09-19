@@ -168,8 +168,8 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"[WS] Ошибка для {user.username}: {e}")
     finally:
-        await connection_manager.disconnect(user.id)
-        print(f"[WS] {user.display_name} ({user.username}) отключился")
+        await connection_manager.disconnect(user.id, websocket=websocket)
+        print(f"[WS] {user.display_name} ({user.username}) отключил соединение")
 
 
 # ========================

@@ -160,11 +160,13 @@ class AvatarWidget(QWidget):
             # Бордер (цвет фона родителя — mantle)
             painter.setPen(Qt.NoPen)
 
-            # Получаем цвет фона из parent (приблизительно)
+            # Получаем цвет фона из parent (с fallback на mantle)
             parent_bg = "#181825"  # mantle по умолчанию
             if self.parent():
                 bg = self.parent().palette().color(self.parent().backgroundRole())
-                parent_bg = bg.name()
+                # QColor.isValid() и alpha > 0 — иначе берём дефолт
+                if bg.isValid() and bg.alpha() > 0:
+                    parent_bg = bg.name()
 
             painter.setBrush(QColor(parent_bg))
             border_rect = QRectF(

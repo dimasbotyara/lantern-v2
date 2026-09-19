@@ -76,7 +76,22 @@ class WebSocketHandler:
             return
 
         event = data.get("event", "")
+        if not isinstance(event, str) or not event:
+            await self.manager.send_to_user(
+                connected_user.user_id,
+                "error",
+                {"message": "Отсутствует поле 'event'"},
+            )
+            return
+
         payload = data.get("data", {})
+        if not isinstance(payload, dict):
+            await self.manager.send_to_user(
+                connected_user.user_id,
+                "error",
+                {"message": "Поле 'data' должно быть объектом"},
+            )
+            return
 
         # Диспетчер событий
         handlers = {

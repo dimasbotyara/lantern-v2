@@ -252,16 +252,29 @@ class ApiClient:
         if not path.exists():
             return ApiResponse(success=False, status=0, error="Файл не найден")
 
-        data = aiohttp.FormData()
-        # ИСПРАВЛЕНО: используем контекстный менеджер для файла
+        # Проверяем размер до чтения (защита от OOM)
+        max_avatar_size = 5 * 1024 * 1024  # 5 MB (как на сервере)
+        file_size = path.stat().st_size
+        if file_size > max_avatar_size:
+            return ApiResponse(
+                success=False, status=0,
+                error=f"Аватар слишком большой ({file_size // 1024 // 1024} MB, "
+                      f"максимум {max_avatar_size // 1024 // 1024} MB)"
+            )
+
+        # Определяем MIME-тип по расширению
+        import mimetypes
+        mime_type = mimetypes.guess_type(str(path))[0] or "image/png"
+
         with open(path, "rb") as f:
             file_bytes = f.read()
 
+        data = aiohttp.FormData()
         data.add_field(
             "file",
             file_bytes,
             filename=path.name,
-            content_type="image/png",
+            content_type=mime_type,
         )
         return await self._request("POST", "/api/auth/me/avatar", data=data)
 
@@ -366,15 +379,22 @@ class ApiClient:
             reply_to_id: Optional[str],
             on_progress: Optional[callable],
     ) -> ApiResponse:
-        """Простая загрузка файла."""
-        data = aiohttp.FormData()
-        data.add_field("chat_id", chat_id)
+        """Простая загрузка файла (для файлов до 50 MB)."""
+        # Защита: этот метод не должен вызываться для больших файлов
+        max_simple_size = 50 * 1024 * 1024  # 50 MB
+        file_size = file_path.stat().st_size
+        if file_size > max_simple_size:
+            return ApiResponse(
+                success=False, status=0,
+                error=f"Файл слишком большой для простой загрузки ({file_size} байт)"
+            )
 
-        # ИСПРАВЛЕНО: читаем файл целиком в память, а не передаём
-        # открытый файловый дескриптор (который никогда не закрывался)
+        # Читаем в память ТОЛЬКО маленькие файлы (до 50 MB)
         with open(file_path, "rb") as f:
             file_bytes = f.read()
 
+        data = aiohttp.FormData()
+        data.add_field("chat_id", chat_id)
         data.add_field(
             "file",
             file_bytes,
@@ -384,7 +404,7 @@ class ApiClient:
             data.add_field("reply_to_id", reply_to_id)
 
         if on_progress:
-            on_progress(0.5)  # Примерный прогресс
+            on_progress(0.5)
 
         result = await self._request("POST", "/api/files/upload", data=data)
 

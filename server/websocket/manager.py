@@ -43,7 +43,7 @@ class ConnectionManager:
 
     def __init__(self):
         # user_id -> ConnectedUser
-        self._connections: dict[str, ConnectedUser] = {}
+        self._connections: dict[str, set[ConnectedUser]] = {}
         # chat_id -> set of user_ids (кэш участников чатов)
         self._chat_members_cache: dict[str, set[str]] = {}
         # user_id -> set of chat_ids (в каких чатах состоит юзер)
@@ -65,57 +65,85 @@ class ConnectionManager:
         """
         Регистрирует новое WebSocket-соединение.
 
-        Args:
-            websocket: WebSocket-соединение.
-            user: Авторизованный пользователь.
-
-        Returns:
-            ConnectedUser объект.
+        Несколько устройств одного пользователя могут быть подключены
+        одновременно — каждое соединение добавляется в set.
         """
         await websocket.accept()
 
+        connected_user = ConnectedUser(
+            user_id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            websocket=websocket,
+        )
+
         async with self._lock:
-            # Если пользователь уже подключён — закрываем старое соединение
-            if user.id in self._connections:
-                old_conn = self._connections[user.id]
-                try:
-                    await old_conn.websocket.close(code=4001, reason="Новое подключение")
-                except Exception:
-                    pass
+            # Добавляем соединение в set (может быть много устройств)
+            if user.id not in self._connections:
+                self._connections[user.id] = set()
+            self._connections[user.id].add(connected_user)
 
-            connected_user = ConnectedUser(
-                user_id=user.id,
-                username=user.username,
-                display_name=user.display_name,
-                websocket=websocket,
-            )
-            self._connections[user.id] = connected_user
+            devices_count = len(self._connections[user.id])
 
-        # Обновляем статус в БД
-        await self._update_user_status(user.id, UserStatus.ONLINE)
+        print(f"[WS] {user.username} подключился "
+              f"(устройств: {devices_count})")
 
-        # Загружаем чаты пользователя в кэш
-        await self._load_user_chats(user.id)
-
-        # Уведомляем всех о появлении пользователя
-        await self.broadcast_status_change(user.id, UserStatus.ONLINE.value)
+        # Обновляем статус в БД (только если это первое устройство)
+        if devices_count == 1:
+            await self._update_user_status(user.id, UserStatus.ONLINE)
+            await self._load_user_chats(user.id)
+            await self.broadcast_status_change(user.id, UserStatus.ONLINE.value)
 
         return connected_user
 
-    async def disconnect(self, user_id: str) -> None:
+    async def disconnect(
+            self,
+            user_id: str,
+            websocket: Optional[WebSocket] = None,
+    ) -> None:
         """
-        Отключает пользователя и очищает его данные.
+        Отключает конкретное WebSocket-соединение пользователя.
 
         Args:
-            user_id: ID отключающегося пользователя.
+            user_id: ID пользователя.
+            websocket: Соединение для отключения.
+                       Если None — отключаются ВСЕ соединения пользователя.
         """
-        async with self._lock:
-            connected_user = self._connections.pop(user_id, None)
+        remaining = 0
 
-        if connected_user is None:
+        async with self._lock:
+            user_connections = self._connections.get(user_id, set())
+
+            if not user_connections:
+                return
+
+            if websocket is not None:
+                # Удаляем конкретное соединение
+                to_remove = {
+                    c for c in user_connections if c.websocket is websocket
+                }
+                user_connections -= to_remove
+            else:
+                # Удаляем все (используется при force-disconnect)
+                user_connections.clear()
+
+            remaining = len(user_connections)
+
+            # Если у пользователя не осталось соединений — убираем запись
+            if not user_connections:
+                self._connections.pop(user_id, None)
+
+        # Если есть ещё устройства — НЕ трогаем статус, не чистим кэш,
+        # не шлём broadcast. Пользователь всё ещё онлайн.
+        if remaining > 0:
+            print(f"[WS] {user_id[:8]} отключил одно устройство "
+                  f"(осталось: {remaining})")
             return
 
-        # Очищаем typing-таймеры
+        # Устройств не осталось — полный оффлайн
+        print(f"[WS] {user_id[:8]} полностью отключился")
+
+        # Очищаем typing-таймеры (теперь можно — пользователь ушёл)
         keys_to_remove = [
             key for key in self._typing_timers
             if key[1] == user_id
@@ -169,8 +197,8 @@ class ConnectionManager:
             if member_id == exclude_user_id:
                 continue
 
-            conn = self._connections.get(member_id)
-            if conn is not None:
+            connections = self._connections.get(member_id, set())
+            for conn in connections:
                 tasks.append(self._safe_send(conn.websocket, message))
 
         if tasks:
@@ -190,12 +218,15 @@ class ConnectionManager:
             event: Тип события.
             data: Данные события.
         """
-        conn = self._connections.get(user_id)
-        if conn is None:
+        connections = self._connections.get(user_id)
+        if not connections:
             return
 
         message = json.dumps({"event": event, "data": data}, default=str, ensure_ascii=False)
-        await self._safe_send(conn.websocket, message)
+
+        tasks = [self._safe_send(c.websocket, message) for c in connections]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def broadcast_to_all(
             self,
@@ -216,10 +247,11 @@ class ConnectionManager:
         message = json.dumps({"event": event, "data": data}, default=str, ensure_ascii=False)
 
         tasks = []
-        for user_id, conn in self._connections.items():
+        for user_id, connections in self._connections.items():
             if user_id == exclude_user_id:
                 continue
-            tasks.append(self._safe_send(conn.websocket, message))
+            for conn in connections:
+                tasks.append(self._safe_send(conn.websocket, message))
 
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -450,14 +482,15 @@ class ConnectionManager:
         """Возвращает список ID подключённых пользователей."""
         return list(self._connections.keys())
 
-    def get_connection(self, user_id: str) -> Optional[ConnectedUser]:
-        """Получает объект подключения пользователя."""
-        return self._connections.get(user_id)
+    @property
+    def active_users_count(self) -> int:
+        """Количество пользователей с хотя бы одним активным соединением."""
+        return len(self._connections)
 
     @property
     def active_connections_count(self) -> int:
-        """Количество активных подключений."""
-        return len(self._connections)
+        """Общее количество активных WebSocket-соединений (все устройства)."""
+        return sum(len(conns) for conns in self._connections.values())
 
 
 # Глобальный экземпляр

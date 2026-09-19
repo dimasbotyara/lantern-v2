@@ -79,6 +79,11 @@ class MainWindow(QMainWindow):
         # Автоподключение
         QTimer.singleShot(100, self._try_auto_connect)
 
+        self._quitting = False
+
+        self._tmp_dir = self._get_tmp_dir()
+        self._cleanup_stale_temp_files()
+
     def _setup_window(self) -> None:
         self.setWindowTitle("🏮 Lantern v2")
         self.setMinimumSize(900, 600)
@@ -226,6 +231,7 @@ class MainWindow(QMainWindow):
         self._message_input = MessageInput(self._palette, self._accent)
         self._message_input.message_submitted.connect(self._on_send_message)
         self._message_input.file_attach_requested.connect(self._on_attach_file)
+        self._message_input.file_upload_requested.connect(self._on_file_upload_requested)
         self._message_input.typing_started.connect(self._on_typing)
         self._message_input.emoji_picker_requested.connect(self._on_show_emoji_picker)
         self._message_input.edit_submitted.connect(self._on_edit_submit)
@@ -310,6 +316,7 @@ class MainWindow(QMainWindow):
             on_reconnecting=self._ws_on_reconnecting,
             on_reconnected=self._ws_on_reconnected,
             on_connection_failed=self._ws_on_connection_failed,
+            on_kicked=self._ws_on_kicked,
             on_new_message=self._ws_on_new_message,
             on_message_edited=self._ws_on_message_edited,
             on_message_deleted=self._ws_on_message_deleted,
@@ -326,6 +333,32 @@ class MainWindow(QMainWindow):
     def _ws_on_reconnecting(self, attempt): self._connection_bar.show_reconnecting(attempt)
     def _ws_on_reconnected(self): self._connection_bar.hide_bar()
     def _ws_on_connection_failed(self, msg): self._connection_bar.show_error(msg)
+
+    def _ws_on_kicked(self, reason: str) -> None:  # ← НОВЫЙ МЕТОД
+        """
+        Обработка кика: пользователь вошёл с другого клиента.
+        Показываем диалог и корректно закрываем приложение.
+        """
+        self._connection_bar.hide_bar()
+
+        # Показываем немодальный диалог, чтобы не блокировать event loop
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Сеанс завершён")
+        msg.setText("Вы вошли с другого устройства")
+        msg.setInformativeText(
+            f"{reason}\n\n"
+            "Это окно будет закрыто. Если это были не вы — "
+            "смените пароль."
+        )
+        msg.setStandardButtons(QMessageBox.Ok)
+
+        def on_closed(result):
+            # Корректно выходим
+            self._on_quit()
+
+        msg.finished.connect(on_closed)
+        msg.open()  # неблокирующий показ
 
     def _ws_on_new_message(self, data: dict):
         chat_id = data.get("chat_id")
@@ -609,15 +642,38 @@ class MainWindow(QMainWindow):
         if path:
             asyncio.ensure_future(self._upload_file(path))
 
-    async def _upload_file(self, path: str) -> None:
+    def _on_file_upload_requested(self, file_path: str, reply_to_id: str) -> None:
+        """
+        Обрабатывает запрос на отправку конкретного файла.
+        Используется для отправки длинных сообщений как .txt.
+        """
+        asyncio.ensure_future(
+            self._upload_file(file_path, reply_to_id or None)
+        )
+
+    async def _upload_file(self, path: str, reply_to_id: Optional[str] = None) -> None:
+        """
+        Загружает файл в текущий чат.
+
+        Args:
+            path: Путь к файлу.
+            reply_to_id: ID сообщения для ответа (или None).
+                         Если не передан — берётся из MessageInput.
+        """
         if not self._current_chat_id:
             return
-        reply_id = self._message_input._reply_message_id
+
+        # Если reply_to_id не передан явно — берём из текущего состояния
+        if reply_to_id is None:
+            reply_to_id = self._message_input._reply_message_id
+
         transfer = await file_transfer_manager.upload_file(
-            self._current_chat_id, path, reply_id,
+            self._current_chat_id, path, reply_to_id,
         )
+
         if transfer.state.value == "completed":
             self._message_input.cancel_reply()
+            self._cleanup_sent_temp_file(path)
 
     def _on_save_file(self, file_att: dict) -> None:
         save_dir = self._config.download_path
@@ -722,6 +778,56 @@ class MainWindow(QMainWindow):
             self._chats = result.data
             self._sidebar.set_chats(self._chats)
 
+    @staticmethod
+    def _get_tmp_dir() -> Path:
+        """
+        Возвращает путь к папке временных файлов Lantern.
+        Кроссплатформенно: на Linux/macOS — системный tmp,
+        на Windows — %TEMP%, на флешке — там же где система решит.
+        """
+        import tempfile
+        tmp_dir = Path(tempfile.gettempdir()) / "lantern_v2"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        return tmp_dir
+
+    def _cleanup_stale_temp_files(self) -> None:
+        """
+        Чистит папку временных файлов при старте приложения.
+        Удаляет ВСЮ папку tmp/lantern_v2 — там только наши файлы,
+        потому что создаём её только мы.
+        """
+        import shutil
+        if self._tmp_dir.exists():
+            try:
+                shutil.rmtree(self._tmp_dir)
+            except OSError as e:
+                print(f"[Tmp] Не удалось очистить {self._tmp_dir}: {e}")
+                return
+
+        # Пересоздаём папку (её могут использовать)
+        try:
+            self._tmp_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            print(f"[Tmp] Не удалось создать {self._tmp_dir}: {e}")
+
+    def _cleanup_sent_temp_file(self, path: str) -> None:
+        """
+        Удаляет временный файл, если он был создан нами
+        (то есть лежит внутри tmp/lantern_v2/).
+
+        Пользовательские файлы, прикреплённые через диалог,
+        НЕ трогаем.
+        """
+        try:
+            file_path = Path(path).resolve()
+
+            # is_relative_to — Python 3.9+. У тебя 3.10+, значит ок.
+            if file_path.is_relative_to(self._tmp_dir):
+                file_path.unlink(missing_ok=True)
+        except (OSError, ValueError) as e:
+            # Не критично — файл останется в tmp, почистится при следующем старте
+            print(f"[Tmp] Не удалось удалить {path}: {e}")
+
     # ========================
     # Window Events
     # ========================
@@ -741,13 +847,21 @@ class MainWindow(QMainWindow):
 
     def _on_quit(self) -> None:
         """Корректный выход из приложения."""
-        # Запускаем очистку и планируем выход после неё
+        # Защита от повторного вызова (например, через трей + Alt+F4)
+        if getattr(self, "_quitting", False):
+            return
+        self._quitting = True
+
         async def _quit_after_cleanup():
             try:
                 await self._cleanup()
-            except Exception:
-                pass
-            QApplication.instance().quit()
+            except Exception as e:
+                print(f"[Quit] Ошибка очистки: {e}")
+            finally:
+                # Останавливаем loop — qasync корректно завершит
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.stop()
 
         asyncio.ensure_future(_quit_after_cleanup())
 

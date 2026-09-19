@@ -68,6 +68,7 @@ class ChatView(QWidget):
     ):
         super().__init__(parent)
 
+        self._is_restoring_scroll = False
         self._palette = palette
         self._accent = accent
         self._current_user_id = ""
@@ -120,7 +121,6 @@ class ChatView(QWidget):
         # Скроллбар
         scrollbar = self._list_view.verticalScrollBar()
         scrollbar.valueChanged.connect(self._on_scroll)
-        scrollbar.rangeChanged.connect(self._on_scroll_range_changed)
 
         # Smooth scrolling — безопасная инициализация
         self._init_smooth_scrolling()
@@ -333,9 +333,6 @@ class ChatView(QWidget):
 
         self._check_visible_messages()
 
-    def _on_scroll_range_changed(self, min_val: int, max_val: int) -> None:
-        pass
-
     def _scroll_to_bottom(self) -> None:
         scrollbar = self._list_view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
@@ -354,10 +351,18 @@ class ChatView(QWidget):
         QTimer.singleShot(50, self._scroll_to_bottom)
 
     def _restore_scroll_position(self, old_max: int, old_value: int) -> None:
-        scrollbar = self._list_view.verticalScrollBar()
-        new_max = scrollbar.maximum()
-        delta = new_max - old_max
-        scrollbar.setValue(old_value + delta)
+        """Восстанавливает позицию скролла после подгрузки старых сообщений."""
+        if self._is_restoring_scroll:
+            return
+
+        self._is_restoring_scroll = True
+        try:
+            scrollbar = self._list_view.verticalScrollBar()
+            new_max = scrollbar.maximum()
+            delta = new_max - old_max
+            scrollbar.setValue(old_value + delta)
+        finally:
+            self._is_restoring_scroll = False
 
     def _check_visible_messages(self) -> None:
         viewport = self._list_view.viewport()
