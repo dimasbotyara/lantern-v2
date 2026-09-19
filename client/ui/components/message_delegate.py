@@ -44,7 +44,7 @@ from PyQt5.QtCore import (
 
 from client.ui.components.message_model import MessageRole
 from client.utils.helpers import format_timestamp, format_file_size, get_file_icon
-from client.themes.fonts import get_font_family
+from client.themes.fonts import get_font_family, get_font_css_stack
 from client.themes.catppuccin import get_palette, Palette, AccentColor
 
 
@@ -313,16 +313,33 @@ class MessageDelegate(QStyledItemDelegate):
         return max(height, 40)  # Минимальная высота
 
     def _calculate_text_height(self, text: str, max_width: int) -> int:
-        """Вычисляет высоту текста с переносами через QTextDocument."""
-        doc = QTextDocument()
-        doc.setDefaultFont(self._font_text)
-        doc.setTextWidth(max_width)
+        """
+        Вычисляет высоту текста с учётом блоков кода.
+        Блоки кода измеряются отдельно — они имеют фиксированную высоту
+        по количеству строк, а не через QTextDocument.
+        """
+        if not text:
+            return 0
 
-        # Применяем markdown-подобную обработку для точного расчёта
-        html = self._markdown_to_html(text)
-        doc.setHtml(html)
+        total_height = 0
+        segments = self._parse_segments(text)
 
-        return int(doc.size().height())
+        for seg in segments:
+            if seg["type"] == "code_block":
+                total_height += self._measure_code_block(seg["content"], max_width)
+            elif seg["type"] == "text":
+                if seg["content"].strip():
+                    total_height += self._measure_text_segment(seg["content"], max_width)
+            elif seg["type"] == "inline_code":
+                # Инлайн-код — часть текста, рисуем как обычный текст
+                # (Fira Code без фона — пока отложим, чтобы не ломать HTML)
+                current_y = self._paint_text_segment(
+                    painter, x, current_y, max_width,
+                    seg["content"],
+                    msg_id,
+                )
+
+        return total_height
 
     def _calculate_reply_height(self, reply: dict, max_width: int) -> int:
         """Вычисляет высоту блока reply."""
@@ -774,9 +791,221 @@ class MessageDelegate(QStyledItemDelegate):
             text: str,
             msg_id: str = "",
     ) -> float:
-        """Рисует текстовый контент с поддержкой markdown (с кэшированием)."""
-        # Проверяем кэш по ID сообщения и ширине
-        cache_key = f"{msg_id}_{int(max_width)}"
+        """
+        Рисует текстовый контент с поддержкой markdown и блоков кода.
+
+        Логика:
+        - Разбиваем текст на сегменты (обычный текст / блок кода / инлайн-код)
+        - Обычный текст рендерим через QTextDocument (он умеет markdown)
+        - Блоки кода рисуем вручную через QPainter (полный контроль фона)
+        - Инлайн-код идёт как часть обычного текста (без фона)
+        """
+        if not text:
+            return y
+
+        segments = self._parse_segments(text)
+
+        current_y = y
+        for seg in segments:
+            if seg["type"] == "code_block":
+                current_y = self._paint_code_block(
+                    painter, x, current_y, max_width, seg["content"]
+                )
+                current_y += self.SPACING
+            elif seg["type"] == "text":
+                if seg["content"].strip() or seg["content"] == "\n":
+                    current_y = self._paint_text_segment(
+                        painter, x, current_y, max_width, seg["content"], msg_id
+                    )
+
+        return current_y
+
+    # ========================
+    # Segment Parsing
+    # ========================
+
+    def _parse_segments(self, text: str) -> list[dict]:
+        """
+        Разбивает сообщение на сегменты:
+        - text: обычный текст (может содержать markdown и инлайн-код)
+        - code_block: ```...```  — блок кода
+        """
+        import re
+
+        segments = []
+        # Ищем только блоки кода
+        pattern = re.compile(r'```(.*?)```', re.DOTALL)
+
+        last_end = 0
+        for match in pattern.finditer(text):
+            # Текст до блока кода
+            if match.start() > last_end:
+                segments.append({
+                    "type": "text",
+                    "content": text[last_end:match.start()],
+                })
+
+            segments.append({
+                "type": "code_block",
+                "content": match.group(1),
+            })
+
+            last_end = match.end()
+
+        # Остаток после последнего блока кода
+        if last_end < len(text):
+            segments.append({
+                "type": "text",
+                "content": text[last_end:],
+            })
+
+        if not segments:
+            segments.append({"type": "text", "content": text})
+
+        return segments
+
+    # ========================
+    # Code Block Measurement
+    # ========================
+
+    def _measure_code_block(self, content: str, max_width: int) -> int:
+        """
+        Высота блока кода.
+        Считаем по количеству строк с учётом переноса.
+        """
+        content = content.strip("\n")
+
+        # Убираем метку языка (python, bash, ...) если она есть
+        lines = content.split("\n")
+        if lines and re.match(r'^[a-zA-Z0-9_+-]+$', lines[0].strip()) and len(lines) > 1:
+            lines = lines[1:]
+        content = "\n".join(lines).rstrip("\n")
+
+        if not content:
+            content = " "
+
+        # Высота одной строки Fira Code
+        fm = QFontMetrics(self._font_code)
+        line_height = fm.height()
+        line_spacing = 4
+        padding_v = 12  # padding по вертикали
+
+        # Считаем визуальные строки (с переносом длинных)
+        visual_lines = 0
+        inner_width = max_width - 32  # padding 16 с каждой стороны
+        for line in content.split("\n"):
+            if not line:
+                visual_lines += 1
+            else:
+                # Сколько раз строка помещается в inner_width
+                line_width = fm.horizontalAdvance(line)
+                visual_lines += max(1, (line_width + inner_width - 1) // inner_width)
+
+        return visual_lines * line_height + (visual_lines - 1) * line_spacing + padding_v * 2
+
+    def _measure_text_segment(self, content: str, max_width: int) -> int:
+        """Высота текстового сегмента через QTextDocument."""
+        doc = QTextDocument()
+        doc.setDefaultFont(self._font_text)
+        doc.setTextWidth(max_width)
+        html = self._markdown_to_html(content)
+        doc.setHtml(f"<body>{html}</body>")
+        return int(doc.size().height())
+
+    # ========================
+    # Painting
+    # ========================
+
+    def _paint_code_block(
+            self,
+            painter: QPainter,
+            x: float,
+            y: float,
+            max_width: float,
+            content: str,
+    ) -> float:
+        """
+        Рисует блок кода: фон, скругление, текст через Fira Code.
+        """
+        content = content.strip("\n")
+
+        # Убираем метку языка
+        lines = content.split("\n")
+        if lines and re.match(r'^[a-zA-Z0-9_+-]+$', lines[0].strip()) and len(lines) > 1:
+            lines = lines[1:]
+        content = "\n".join(lines).rstrip("\n")
+
+        if not content:
+            content = " "
+
+        # Метрики
+        fm = QFontMetrics(self._font_code)
+        line_height = fm.height()
+        line_spacing = 4
+        padding_h = 16
+        padding_v = 12
+
+        # Считаем визуальные строки и общую высоту
+        inner_width = max_width - padding_h * 2
+        visual_lines_text = []
+        for line in content.split("\n"):
+            if not line:
+                visual_lines_text.append("")
+                continue
+            # Разбиваем длинные строки
+            if fm.horizontalAdvance(line) <= inner_width:
+                visual_lines_text.append(line)
+            else:
+                # Разбиваем на части
+                current = ""
+                for ch in line:
+                    if fm.horizontalAdvance(current + ch) > inner_width:
+                        visual_lines_text.append(current)
+                        current = ch
+                    else:
+                        current += ch
+                if current:
+                    visual_lines_text.append(current)
+
+        block_height = (
+            len(visual_lines_text) * line_height
+            + (len(visual_lines_text) - 1) * line_spacing
+            + padding_v * 2
+        )
+
+        # Фон блока
+        block_rect = QRectF(x, y, max_width, block_height)
+        path = QPainterPath()
+        path.addRoundedRect(block_rect, 6, 6)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(self._palette.mantle))
+        painter.drawPath(path)
+
+        # Текст
+        painter.setFont(self._font_code)
+        painter.setPen(QColor(self._palette.text))
+
+        text_y = y + padding_v + fm.ascent()
+        for line in visual_lines_text:
+            painter.drawText(QPointF(x + padding_h, text_y), line)
+            text_y += line_height + line_spacing
+
+        return y + block_height
+
+    def _paint_text_segment(
+            self,
+            painter: QPainter,
+            x: float,
+            y: float,
+            max_width: float,
+            content: str,
+            msg_id: str = "",
+    ) -> float:
+        """
+        Рисует текстовый сегмент через QTextDocument.
+        Кэширует по (msg_id, content_hash, width).
+        """
+        cache_key = f"{msg_id}_seg_{hash(content)}_{int(max_width)}"
         doc = self._doc_cache.get(cache_key)
 
         if doc is None:
@@ -784,12 +1013,12 @@ class MessageDelegate(QStyledItemDelegate):
             doc.setDefaultFont(self._font_text)
             doc.setTextWidth(max_width)
 
-            html = self._markdown_to_html(text)
-            default_style = f"color: {self._color_text.name()};"
-            doc.setDefaultStyleSheet(f"body {{ {default_style} }}")
+            html = self._markdown_to_html(content)
+            doc.setDefaultStyleSheet(
+                f"body {{ color: {self._color_text.name()}; }}"
+            )
             doc.setHtml(f"<body>{html}</body>")
 
-            # Сохраняем в кэш (ограничиваем размер, чтобы не пожрать память)
             if len(self._doc_cache) > 200:
                 self._doc_cache.clear()
             self._doc_cache[cache_key] = doc
@@ -1197,7 +1426,7 @@ class MessageDelegate(QStyledItemDelegate):
 
     def _markdown_to_html(self, text: str) -> str:
         """
-        Конвертирует базовый Markdown в HTML.
+        Конвертирует markdown в HTML.
 
         Поддержка:
         - **жирный** → <b>жирный</b>
@@ -1205,65 +1434,56 @@ class MessageDelegate(QStyledItemDelegate):
         - __подчёркнутый__ → <u>подчёркнутый</u>
         - ~~зачёркнутый~~ → <s>зачёркнутый</s>
         - ||спойлер|| → <span style="background:...">спойлер</span>
-        - `код` → <code>код</code>
-        - ```блок кода``` → <pre>блок кода</pre>
+        - `инлайн-код` → <code style="font-family: Fira Code">инлайн-код</code>
+
+        ВАЖНО: инлайн-код обрабатывается ДО html.escape, чтобы не экранировать
+        наш собственный HTML. Остальной текст экранируется после.
         """
         import html as html_module
-        # Экранируем HTML
+
+        # 1. Вырезаем инлайн-код ПЛЕЙСХОЛДЕРАМИ (до escape)
+        code_store: list[str] = []
+
+        def stash_code(match):
+            idx = len(code_store)
+            code_store.append(match.group(1))
+            return f"\x00CODE{idx}\x00"
+
+        text = re.sub(r'`([^`\n]+)`', stash_code, text)
+
+        # 2. Экранируем HTML (но плейсхолдеры \x00 не тронуты)
         text = html_module.escape(text)
 
-        # Блок кода (```)
-        text = re.sub(
-            r'```(.*?)```',
-            lambda m: (
-                f'<pre style="background-color: {self._palette.mantle}; '
-                f'color: {self._palette.text}; '
-                f'padding: 8px 12px; border-radius: 6px; '
-                f'font-family: {get_font_css_stack("code")}; '
-                f'font-size: 13px; white-space: pre-wrap;">'
-                f'{m.group(1)}</pre>'
-            ),
-            text,
-            flags=re.DOTALL,
-        )
-
-        # Инлайн-код (`)
-        text = re.sub(
-            r'`([^`]+)`',
-            lambda m: (
-                f'<code style="background-color: {self._palette.mantle}; '
-                f'padding: 2px 6px; border-radius: 4px; '
-                f'font-family: {get_font_css_stack("code")}; '
-                f'font-size: 13px;">{m.group(1)}</code>'
-            ),
-            text,
-        )
-
-        # Жирный (**)
+        # 3. Обрабатываем остальную markdown-разметку
         text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
-
-        # Курсив (*)
         text = re.sub(r'\*(.+?)\*', r'<i>\1</i>', text)
-
-        # Подчёркнутый (__)
         text = re.sub(r'__(.+?)__', r'<u>\1</u>', text)
-
-        # Зачёркнутый (~~)
         text = re.sub(r'~~(.+?)~~', r'<s>\1</s>', text)
-
-        # Спойлер (||)
         text = re.sub(
             r'\|\|(.+?)\|\|',
             lambda m: (
                 f'<span style="background-color: {self._palette.surface2}; '
                 f'color: {self._palette.surface2}; '
-                f'border-radius: 4px; padding: 0 4px; '
-                f'cursor: pointer;">{m.group(1)}</span>'
+                f'border-radius: 4px; padding: 0 4px;">{m.group(1)}</span>'
             ),
             text,
         )
 
-        # Переносы строк
+        # 4. Возвращаем инлайн-код как готовый HTML
+        code_family = self._font_code.family()
+        code_size = self._font_code.pointSize()
+        for idx, code_content in enumerate(code_store):
+            safe_code = html_module.escape(code_content)
+            replacement = (
+                f'<code style="font-family: {code_family}, monospace; '
+                f'font-size: {code_size}pt; '
+                f'background-color: {self._palette.surface0}; '
+                f'padding: 1px 5px;">'
+                f'{safe_code}</code>'
+            )
+            text = text.replace(f"\x00CODE{idx}\x00", replacement)
+
+        # 5. Переносы строк
         text = text.replace('\n', '<br>')
 
         return text
