@@ -6,8 +6,8 @@ JWT-токены, хэширование паролей, верификация.
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+import bcrypt as bcrypt_lib
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, WebSocket
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
@@ -20,14 +20,12 @@ from server.database import get_session, User
 # Password Hashing
 # ========================
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 security_scheme = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
     """
-    Хэширует пароль bcrypt.
+    Хэширует пароль bcrypt напрямую, без passlib.
 
     Args:
         password: Открытый пароль.
@@ -35,12 +33,15 @@ def hash_password(password: str) -> str:
     Returns:
         Хэш пароля.
     """
-    return pwd_context.hash(password)
+    password_bytes = password.encode("utf-8")
+    salt = bcrypt_lib.gensalt(rounds=12)
+    hashed = bcrypt_lib.hashpw(password_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
-    Проверяет пароль против хэша.
+    Проверяет пароль против bcrypt-хэша.
 
     Args:
         plain_password: Открытый пароль.
@@ -49,7 +50,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True если совпадает.
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt_lib.checkpw(
+            plain_password.encode("utf-8"),
+            hashed_password.encode("utf-8"),
+        )
+    except Exception:
+        return False
 
 
 # ========================
