@@ -171,7 +171,7 @@ async def get_chats(
 
     # Сортируем: чаты с последними сообщениями первыми
     result.sort(
-        key=lambda c: c.last_message["created_at"] if c.last_message else "0",
+        key=lambda c: c.last_message.created_at.isoformat() if c.last_message else "0",
         reverse=True,
     )
 

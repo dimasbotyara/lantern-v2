@@ -20,9 +20,15 @@ from server.database import (
 )
 
 
-@dataclass
+@dataclass(eq=False)
 class ConnectedUser:
-    """Информация о подключённом пользователе."""
+    """
+    Информация о подключённом пользователе.
+
+    eq=False: сравниваем по идентичности объекта (как WebSocket),
+    а не по значению полей. Это делает объект hashable по id(),
+    что нужно для хранения в set.
+    """
     user_id: str
     username: str
     display_name: str
