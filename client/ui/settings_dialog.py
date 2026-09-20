@@ -362,17 +362,6 @@ class SettingsDialog(QDialog):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        layout.addWidget(self._section_title("РАЗМЕР ШРИФТА"))
-
-        font_row = QHBoxLayout()
-        self._font_size_spin = QSpinBox()
-        self._font_size_spin.setRange(10, 24)
-        self._font_size_spin.setValue(14)
-        self._font_size_spin.setSuffix(" px")
-        font_row.addWidget(self._font_size_spin)
-        font_row.addStretch()
-        layout.addLayout(font_row)
-
         layout.addWidget(self._section_title("ОТОБРАЖЕНИЕ"))
 
         self._show_timestamps_check = QCheckBox("Показывать время сообщений")
@@ -475,7 +464,16 @@ class SettingsDialog(QDialog):
     def _style_color_btn(self, btn: QPushButton, color: str, selected: bool) -> None:
         border = f"3px solid {self._palette.text}" if selected else "2px solid transparent"
         btn.setStyleSheet(
-            f"QPushButton {{ background-color: {color}; border-radius: 18px; border: {border}; }}"
+            f"QPushButton {{ "
+            f"background-color: {color}; "
+            f"border-radius: 18px; "
+            f"border: {border}; "
+            f"padding: 0px; "
+            f"min-width: 36px; "
+            f"max-width: 36px; "
+            f"min-height: 36px; "
+            f"max-height: 36px; "
+            f"}}"
             f"QPushButton:hover {{ border: 2px solid {self._palette.text}; }}"
         )
 
@@ -661,7 +659,6 @@ class SettingsDialog(QDialog):
         # Чат
         self.chat_settings_changed.emit({
             "enter_sends": self._enter_sends_check.isChecked(),
-            "font_size": self._font_size_spin.value(),
             "show_timestamps": self._show_timestamps_check.isChecked(),
             "show_typing": self._typing_indicator_check.isChecked(),
         })

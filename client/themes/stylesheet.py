@@ -435,8 +435,9 @@ QWidget#sidebar {{
 
 QWidget#sidebarHeader {{
     background-color: {self.p.mantle};
-    padding: 12px 16px;
-    min-height: 48px;
+    padding: 8px 16px;
+    min-height: 52px;
+    max-height: 52px;
 }}
 
 QListWidget#chatList {{
