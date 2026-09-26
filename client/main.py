@@ -27,8 +27,11 @@ from PyQt5.QtWidgets import (
     QSystemTrayIcon, QMenu, QAction, QLabel, QMessageBox,
     QPushButton,
 )
-from PyQt5.QtGui import QIcon, QFont, QPixmap, QCloseEvent, QColor, QPainter
-from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QSettings
+from PyQt5.QtGui import (
+    QIcon, QFont, QPixmap, QCloseEvent, QColor, QPainter,
+    QLinearGradient, QPen
+)
+from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QSettings, QRectF
 
 import qasync
 
@@ -267,18 +270,11 @@ class MainWindow(QMainWindow):
 
     def _setup_tray(self) -> None:
         self._tray = QSystemTrayIcon(self)
-        self._tray.setToolTip("Lantern v2")
+        self._tray.setToolTip("Lantern v2 Chat")
 
-        # Создаём простую иконку
-        pixmap = QPixmap(32, 32)
-        pixmap.fill(Qt.transparent)
-        from PyQt5.QtGui import QPainter as P2
-        p = P2(pixmap)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(self._accent.hex))
-        p.drawEllipse(2, 2, 28, 28)
-        p.end()
-        self._tray.setIcon(QIcon(pixmap))
+        # Создаём красивую иконку фонарика 🏮
+        icon = self._create_tray_icon()
+        self._tray.setIcon(icon)
 
         tray_menu = QMenu()
         show_action = QAction("Показать", self)
@@ -292,6 +288,91 @@ class MainWindow(QMainWindow):
         self._tray.setContextMenu(tray_menu)
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
+
+    def _create_tray_icon(self) -> QIcon:
+        """Создаёт красивую иконку фонарика для трея."""
+        sizes = [16, 22, 24, 32]
+        icon = QIcon()
+        
+        for size in sizes:
+            pixmap = QPixmap(size, size)
+            pixmap.fill(Qt.transparent)
+            
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            
+            # Вычисляем масштаб
+            s = size
+            margin = max(1, s // 16)
+            
+            # === Корпус фонарика (внешний прямоугольник) ===
+            body_rect = QRectF(margin, margin, s - 2 * margin, s - 2 * margin)
+            
+            # Основной цвет из темы
+            main_color = QColor(self._accent.hex)
+            light_color = main_color.lighter(120)
+            dark_color = main_color.darker(120)
+            
+            # Граница корпуса
+            painter.setPen(QPen(dark_color, max(1, s // 20)))
+            painter.setBrush(main_color)
+            painter.drawRoundedRect(body_rect, s // 8, s // 8)
+            
+            # === Стекло (верхняя половина светлее) ===
+            glass_rect = QRectF(
+                body_rect.left() + margin // 2,
+                body_rect.top() + margin // 2,
+                body_rect.width() - margin,
+                body_rect.height() * 0.6
+            )
+            glass_gradient = QLinearGradient(
+                glass_rect.topLeft(),
+                glass_rect.bottomLeft()
+            )
+            glass_gradient.setColorAt(0, light_color)
+            glass_gradient.setColorAt(1, main_color)
+            
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(glass_gradient)
+            painter.drawRoundedRect(glass_rect, s // 12, s // 12)
+            
+            # === Огонь внутри (жёлтый/оранжевый) ===
+            flame_rect = QRectF(
+                body_rect.left() + body_rect.width() * 0.25,
+                body_rect.top() + body_rect.height() * 0.15,
+                body_rect.width() * 0.5,
+                body_rect.height() * 0.4
+            )
+            
+            flame_gradient = QLinearGradient(
+                flame_rect.center(),
+                flame_rect.bottomLeft()
+            )
+            flame_gradient.setColorAt(0, QColor(255, 220, 100))
+            flame_gradient.setColorAt(0.7, QColor(255, 160, 60))
+            flame_gradient.setColorAt(1, main_color)
+            
+            painter.setBrush(flame_gradient)
+            painter.drawEllipse(flame_rect)
+            
+            # === Блик света ===
+            shine = QRectF(
+                glass_rect.left() + glass_rect.width() * 0.2,
+                glass_rect.top() + glass_rect.height() * 0.15,
+                glass_rect.width() * 0.3,
+                glass_rect.height() * 0.25
+            )
+            shine_color = QColor(255, 255, 255, 100)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(shine_color)
+            painter.drawEllipse(shine)
+            
+            painter.end()
+            
+            icon.addPixmap(pixmap)
+        
+        return icon
 
     def _on_tray_activated(self, reason) -> None:
         if reason == QSystemTrayIcon.DoubleClick:

@@ -1,5 +1,11 @@
 # 🏮 Lantern v2
 
+[![Python CI](https://img.shields.io/github/actions/workflow/status/dimasbotyara/lantern-v2/python-app.yml?branch=main&style=for-the-badge&logo=github-actions&logoColor=white&label=Python%20CI)](https://github.com/dimasbotyara/lantern-v2/actions)
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![PyQt5](https://img.shields.io/badge/Qt-PyQt5-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://www.qt.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
 Lantern v2 is an encrypted LAN messenger written in Python. It includes a FastAPI-based server and a PyQt5 desktop client. The project aims to provide private, local-network chat with file transfer, stickers, polls, and WebSocket-based real-time messaging.
 
 ## Repository layout
